@@ -21,7 +21,7 @@ jobs:
           cd /tmp/api
           git checkout main || true
           git pull --ff-only || true
-          npm ci
+          npm install
           npm run build
           node dist/index.js &
           echo $! > /tmp/api-server.pid
