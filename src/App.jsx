@@ -20,6 +20,7 @@ import { API_URL } from "./api/client";
 import LoginAdmin from "./admin/LoginAdmin.tsx";
 import { HealthDebug } from "./debug/HealthDebug";
 import { MessagesDebug } from "./debug/MessagesDebug";
+import Landing from "./Landing.jsx";
 
 const API_BASE = API_URL;
 const API_TOKEN = 'saftoken-123';
@@ -1151,8 +1152,8 @@ export default function App() {
       <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
       <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
 
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Landing />} />
+      <Route path="/*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
