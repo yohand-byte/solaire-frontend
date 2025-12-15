@@ -52,6 +52,23 @@ jobs:
           cat /tmp/mcp_documents.json
           jq type /tmp/mcp_documents.json >/tmp/ok2.txt
           test "$status" -eq 200
+      - name: Smoke payments intent
+        run: |
+          status=$(curl -s -o /tmp/pay_intent.json -w "%{http_code}" -X POST http://localhost:3000/api/payments/intent -H 'Content-Type: application/json' -d '{"amount":1000}')
+          cat /tmp/pay_intent.json
+          if [ "$status" -eq 200 ] || [ "$status" -eq 501 ]; then exit 0; fi
+          exit 1
+      - name: Smoke websocket ping/pong
+        run: |
+          cat > /tmp/ws-smoke.js <<'JS'
+          const { io } = require('socket.io-client');
+          const client = io('http://localhost:3000', { timeout: 2000, reconnection: false });
+          const timer = setTimeout(() => { console.error('timeout'); process.exit(1); }, 3000);
+          client.on('connect', () => client.emit('ping'));
+          client.on('pong', () => { clearTimeout(timer); client.disconnect(); process.exit(0); });
+          client.on('connect_error', () => { clearTimeout(timer); process.exit(1); });
+          JS
+          node /tmp/ws-smoke.js
       - name: Stop API
         if: always()
         run: |
