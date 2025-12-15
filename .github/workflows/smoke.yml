@@ -60,6 +60,8 @@ jobs:
           cat /tmp/pay_intent.json
           if [ "$status" -eq 200 ] || [ "$status" -eq 501 ]; then exit 0; fi
           exit 1
+      - name: Install socket client
+        run: npm install socket.io-client
       - name: Smoke websocket ping/pong
         run: |
           cat > /tmp/ws-smoke.js <<'JS'
