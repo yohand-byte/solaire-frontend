@@ -28,3 +28,18 @@ firebase deploy --only hosting,firestore:rules --project solaire-frontend
 - `useCollection` attend `useAuth` avant la lecture (évite erreurs `Missing permissions`).
 - `scripts/seed-demo.js` peut être lancé sur n’importe quelle machine disposant des credentials admin.
 - Toujours exécuter `node scripts/seed-demo.js` après un nettoyage (`/dev/seed > Vider les collections`).
+
+## 🌐 Environnements / Variables
+- `REACT_APP_API_URL` (ex: http://localhost:3000)
+- `REACT_APP_FIREBASE_CONFIG` (JSON stringify du config Firebase)
+- `VITE_API_WS_URL` (optionnel, ex: http://localhost:3000 pour le websocket)
+
+## 📦 Build statique
+```bash
+npm install
+npm run build
+```
+Le bundle est produit dans `dist/` (utilisé pour Pages/hosting).
+
+## 🔗 Déploiement (GH Pages / hosting)
+- Voir DEPLOYMENT.md pour les étapes GH Pages.
