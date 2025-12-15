@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection.tsx";
+import { API_URL } from "../api/client";
 
-const API_BASE = "https://solaire-api.onrender.com";
+const API_BASE = API_URL;
 const API_TOKEN = "saftoken-123";
 
 function formatDate(value: any) {

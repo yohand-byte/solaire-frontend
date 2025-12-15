@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { PACKS } from "../constants";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { API_URL } from "../api/client";
 
-const API_BASE = "https://solaire-api.onrender.com";
+const API_BASE = API_URL;
 
 type FileItem = {
   id: string;

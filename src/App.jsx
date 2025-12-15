@@ -16,11 +16,12 @@ import { useCollection } from "./hooks/useCollection.tsx";
 import DevSeed from "./admin/DevSeed.tsx";
 import FixInstallerIds from "./admin/FixInstallerIds.tsx";
 import { useAuth } from "./hooks/useAuth.tsx";
+import { API_URL } from "./api/client";
 import LoginAdmin from "./admin/LoginAdmin.tsx";
 import { HealthDebug } from "./debug/HealthDebug";
 import { MessagesDebug } from "./debug/MessagesDebug";
 
-const API_BASE = 'https://solaire-api.onrender.com';
+const API_BASE = API_URL;
 const API_TOKEN = 'saftoken-123';
 
 const HomeIcon = () => (

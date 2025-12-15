@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { API_URL } from "../api/client";
 
-const API_BASE = "https://solaire-api.onrender.com";
+const API_BASE = API_URL;
 
 type FileDetail = {
   id: string;
