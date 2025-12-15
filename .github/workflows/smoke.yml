@@ -19,6 +19,8 @@ jobs:
         run: |
           git clone https://github.com/yohand-byte/solaire-api.git /tmp/api
           cd /tmp/api
+          git checkout main || true
+          git pull --ff-only || true
           npm ci
           npm run build
           node dist/index.js &
@@ -42,16 +44,29 @@ jobs:
           test "$status" -eq 200
       - name: Smoke MCP workflows:list
         run: |
-          status=$(curl -s -o /tmp/mcp_workflows.json -w "%{http_code}" http://localhost:3000/mcp/workflows/list)
+          status=$(curl -s -o /tmp/mcp_workflows.json -w "%{http_code}" -X POST http://localhost:3000/mcp/workflows/list)
           cat /tmp/mcp_workflows.json
           jq type /tmp/mcp_workflows.json >/tmp/ok.txt
           test "$status" -eq 200
       - name: Smoke MCP documents:list
         run: |
-          status=$(curl -s -o /tmp/mcp_documents.json -w "%{http_code}" http://localhost:3000/mcp/documents/list)
+          status=$(curl -s -o /tmp/mcp_documents.json -w "%{http_code}" -X POST http://localhost:3000/mcp/documents/list)
           cat /tmp/mcp_documents.json
           jq type /tmp/mcp_documents.json >/tmp/ok2.txt
           test "$status" -eq 200
+      - name: Install socket client
+        run: npm install socket.io-client
+      - name: Smoke websocket ping/pong
+        run: |
+          cat > ws-smoke.cjs <<'JS'
+          const { io } = require('socket.io-client');
+          const client = io('http://localhost:3000', { timeout: 2000, reconnection: false });
+          const timer = setTimeout(() => { console.error('timeout'); process.exit(1); }, 3000);
+          client.on('connect', () => client.emit('ping'));
+          client.on('pong', () => { clearTimeout(timer); client.disconnect(); process.exit(0); });
+          client.on('connect_error', () => { clearTimeout(timer); process.exit(1); });
+          JS
+          node ws-smoke.cjs
       - name: Stop API
         if: always()
         run: |
