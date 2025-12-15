@@ -17,6 +17,7 @@ import DevSeed from "./admin/DevSeed.tsx";
 import FixInstallerIds from "./admin/FixInstallerIds.tsx";
 import { useAuth } from "./hooks/useAuth.tsx";
 import LoginAdmin from "./admin/LoginAdmin.tsx";
+import { HealthDebug } from "./debug/HealthDebug";
 
 const API_BASE = 'https://solaire-api.onrender.com';
 const API_TOKEN = 'saftoken-123';
@@ -1140,6 +1141,7 @@ export default function App() {
       <Route path="/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
       <Route path="/dev/seed" element={<AdminRoute><DevSeed /></AdminRoute>} />
       <Route path="/admin/fix-installer" element={<AdminRoute><FixInstallerIds /></AdminRoute>} />
+      <Route path="/debug/health" element={<HealthDebug />} />
 
       <Route path="/client/login" element={<ClientLogin />} />
       <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
