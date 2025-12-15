@@ -64,7 +64,7 @@ jobs:
         run: npm install socket.io-client
       - name: Smoke websocket ping/pong
         run: |
-          cat > /tmp/ws-smoke.js <<'JS'
+          cat > ws-smoke.js <<'JS'
           const { io } = require('socket.io-client');
           const client = io('http://localhost:3000', { timeout: 2000, reconnection: false });
           const timer = setTimeout(() => { console.error('timeout'); process.exit(1); }, 3000);
@@ -72,7 +72,7 @@ jobs:
           client.on('pong', () => { clearTimeout(timer); client.disconnect(); process.exit(0); });
           client.on('connect_error', () => { clearTimeout(timer); process.exit(1); });
           JS
-          node /tmp/ws-smoke.js
+          node ws-smoke.js
       - name: Stop API
         if: always()
         run: |
