@@ -1,0 +1,2 @@
+import { apiClient } from './client';
+export const documentsApi = { list: (projectId: string) => apiClient.get('/documents', { params: { projectId } }), upload: (formData: FormData) => apiClient.post('/documents/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }), download: (id: string) => apiClient.get(`/documents/${id}/download`), share: (id: string, expiresInHours = 24) => apiClient.post(`/documents/${id}/share`, { expiresInHours }) };
