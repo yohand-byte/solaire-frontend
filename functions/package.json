@@ -1,0 +1,8 @@
+{
+  "name": "firebase-functions",
+  "description": "Cloud Functions",
+  "dependencies": {
+    "firebase-functions": "^4.0.0",
+    "firebase-admin": "^12.0.0"
+  }
+}
