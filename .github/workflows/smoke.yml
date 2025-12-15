@@ -21,7 +21,7 @@ jobs:
           cd /tmp/api
           git checkout main || true
           git pull --ff-only || true
-          npm ci
+          npm install
           npm run build
           node dist/index.js &
           echo $! > /tmp/api-server.pid
@@ -67,6 +67,11 @@ jobs:
           client.on('connect_error', () => { clearTimeout(timer); process.exit(1); });
           JS
           node ws-smoke.cjs
+      - name: Smoke messages list
+        run: |
+          status=$(curl -s -o /tmp/msg.json -w "%{http_code}" "http://localhost:3000/api/messages?projectId=smoke")
+          cat /tmp/msg.json
+          test "$status" -eq 200
       - name: Stop API
         if: always()
         run: |
