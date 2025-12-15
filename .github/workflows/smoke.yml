@@ -19,6 +19,8 @@ jobs:
         run: |
           git clone https://github.com/yohand-byte/solaire-api.git /tmp/api
           cd /tmp/api
+          git checkout main || true
+          git pull --ff-only || true
           npm ci
           npm run build
           node dist/index.js &
