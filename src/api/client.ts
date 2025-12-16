@@ -29,5 +29,11 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("firebaseToken");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (config.url && config.url.includes("/api/admin/")) {
+    const adminKey = sessionStorage.getItem("ADMIN_API_KEY") || "";
+    if (adminKey) {
+      config.headers["X-ADMIN-KEY"] = adminKey;
+    }
+  }
   return config;
 });
