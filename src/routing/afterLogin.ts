@@ -4,8 +4,9 @@ import { NavigateFunction } from "react-router-dom";
 export async function routeAfterLogin(user: User, navigate?: NavigateFunction) {
   const token = await getIdTokenResult(user, true);
   const role = token.claims.role as string | undefined;
+  const installerId = token.claims.installerId as string | undefined;
   const go = navigate ? (path: string) => navigate(path, { replace: true }) : (path: string) => (window.location.href = path);
   if (role === "admin") return go("/admin/dashboard");
-  if (role === "installer") return go("/client/dashboard");
+  if (role === "installer" && installerId) return go("/client/dashboard");
   return go("/client/pending");
 }

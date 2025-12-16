@@ -2,14 +2,23 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firestore";
+import { useAuth } from "../hooks/useAuth";
 
 export default function ClientDashboard() {
   const navigate = useNavigate();
-  const { data: files, loading } = useCollection("files");
+  const { claims, loading: authLoading } = useAuth();
+  const installerId = claims?.installerId;
+  const { data: files, loading, error } = useCollection("files", undefined, installerId);
   const f = files || [];
 
-  if (loading) {
+  if (authLoading || loading) {
     return <div className="card">Chargement…</div>;
+  }
+  if (!installerId) {
+    return <div className="card">En attente de validation (installerId manquant)</div>;
+  }
+  if (error) {
+    return <div className="card">Erreur : {error.message}</div>;
   }
 
   const stats = {

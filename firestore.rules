@@ -4,7 +4,9 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isAdmin() { return isSignedIn() && request.auth.uid == 'yrpmKIwuSydzH8nWMahRlWZictb2'; }
     match /files/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+                  && request.auth.token.role == 'installer'
+                  && resource.data.installerId == request.auth.token.installerId;
       allow create, update, delete: if isAdmin();
     }
     match /clients/{id} {

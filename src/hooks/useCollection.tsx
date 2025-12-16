@@ -3,7 +3,7 @@ import { db } from "../lib/firestore";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useAuth } from "./useAuth";
 
-export function useCollection(path: string, whereClause?: [string, string, any]) {
+export function useCollection(path: string, whereClause?: [string, string, any], installerFilter?: string) {
   const { user, claims, role, loading: authLoading } = useAuth();
   const [data, setData] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,8 +21,14 @@ export function useCollection(path: string, whereClause?: [string, string, any])
     }
     const colRef = collection(db, path);
     let q: any = colRef;
-    if (role === "client") {
-      const installerId = claims?.installerId || "INST123";
+    if (role === "installer") {
+      const installerId = installerFilter || claims?.installerId;
+      if (!installerId) {
+        setError(new Error("installerId missing in claims"));
+        setData([]);
+        setLoading(false);
+        return;
+      }
       q = query(colRef, where("installerId", "==", installerId));
     } else if (whereClause) {
       q = query(colRef, where(whereClause[0], whereClause[1], whereClause[2]));
@@ -40,7 +46,7 @@ export function useCollection(path: string, whereClause?: [string, string, any])
       }
     );
     return () => unsub();
-  }, [path, authLoading, user, role, claims?.installerId]);
+  }, [path, authLoading, user, role, claims?.installerId, installerFilter, whereClause]);
 
   return { data, loading, error };
 }
