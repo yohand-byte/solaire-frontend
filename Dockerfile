@@ -30,6 +30,6 @@ ENV NODE_ENV=production
 ENV PORT=8080
 COPY package*.json ./
 RUN npm ci --omit=dev
+COPY server.js ./server.js
 COPY --from=build /app/dist ./dist
-# Serve prebuilt dist via "serve"
 CMD ["npm","run","start"]

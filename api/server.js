@@ -165,5 +165,8 @@ app.post("/api/admin/reject-lead", requireAdminKey, async (req, res) => {
   }
 });
 
+// Fallback JSON 404 for missing /api routes (avoid HTML responses)
+app.use("/api", (_req, res) => res.status(404).json({ error: "not_found" }));
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`API running on :${PORT}`));
