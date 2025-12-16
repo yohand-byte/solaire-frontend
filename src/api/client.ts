@@ -14,7 +14,7 @@ const deriveWsUrl = () => {
 export const API_WS_URL = deriveWsUrl();
 
 if (!API_URL) {
-  throw new Error("VITE_API_URL manquante");
+  throw new Error("VITE_API_URL manquante (doit pointer vers le service Cloud Run solaire-api)");
 }
 
 if (!API_WS_URL) {
