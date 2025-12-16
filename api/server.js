@@ -14,6 +14,14 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
+const requireAdminKey = (req, res, next) => {
+  const key = req.header("X-ADMIN-KEY");
+  if (!key || key !== process.env.ADMIN_API_KEY) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  next();
+};
+
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
@@ -21,14 +29,9 @@ app.use(
   cors({
     origin: process.env.FRONTEND_ORIGIN,
     methods: ["POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-ADMIN-KEY"],
   })
 );
-
-const healthHandler = (_req, res) => res.json({ ok: true, status: "healthy" });
-app.get("/", healthHandler);
-app.get("/healthz", healthHandler);
-app.get("/api/healthz", healthHandler);
 
 app.post("/api/leads", async (req, res) => {
   try {
@@ -49,7 +52,7 @@ app.post("/api/leads", async (req, res) => {
   }
 });
 
-app.post("/api/admin/approve-lead", async (req, res) => {
+app.post("/api/admin/approve-lead", requireAdminKey, async (req, res) => {
   try {
     const { leadId, installerId, role = "installer" } = req.body || {};
     if (!leadId || !installerId) return res.status(400).json({ error: "leadId and installerId required" });
@@ -100,7 +103,7 @@ app.post("/api/admin/approve-lead", async (req, res) => {
   }
 });
 
-app.post("/api/admin/reject-lead", async (req, res) => {
+app.post("/api/admin/reject-lead", requireAdminKey, async (req, res) => {
   try {
     const { leadId, reason } = req.body || {};
     if (!leadId) return res.status(400).json({ error: "leadId required" });
