@@ -32,6 +32,12 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "X-ADMIN-KEY"],
   })
 );
+app.use((req, _res, next) => {
+  if (req.path.startsWith("/api/admin/leads")) {
+    console.log("HIT", req.method, req.path);
+  }
+  next();
+});
 
 app.post("/api/leads", async (req, res) => {
   try {
@@ -57,12 +63,12 @@ app.post("/api/leads", async (req, res) => {
 
 app.get("/api/admin/leads", requireAdminKey, async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const offset = parseInt(req.query.offset as string) || 0;
-    const status = (req.query.status as string) || undefined;
-    const email = (req.query.email as string) || undefined;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    const status = req.query.status || undefined;
+    const email = req.query.email || undefined;
 
-    let q: FirebaseFirestore.Query = db.collection("leads").orderBy("createdAt", "desc");
+    let q = db.collection("leads").orderBy("createdAt", "desc");
     if (status) {
       q = q.where("status", "==", status);
     }
@@ -73,7 +79,7 @@ app.get("/api/admin/leads", requireAdminKey, async (req, res) => {
     const snap = await q.offset(offset).limit(limit).get();
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    let total: number | null = null;
+    let total = null;
     try {
       const aggregate = await q.count().get();
       total = aggregate.data().count || 0;
