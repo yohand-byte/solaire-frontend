@@ -28,15 +28,17 @@ app.use(express.json({ limit: "1mb" }));
 app.use(
   cors({
     origin: process.env.FRONTEND_ORIGIN,
-    methods: ["POST", "OPTIONS"],
+    methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-ADMIN-KEY"],
   })
 );
 
 app.post("/api/leads", async (req, res) => {
   try {
-    const { email, name, company, phone, cguAccepted } = req.body || {};
+    const { email, name, company, phone, cguAccepted, source } = req.body || {};
     if (!email) return res.status(400).json({ error: "email required" });
+    const now = admin.firestore?.FieldValue?.serverTimestamp?.() || Date.now();
+    const normalizedSource = source === "landing" ? "landing" : "api";
     const ref = await db.collection("leads").add({
       email,
       name: name || "",
@@ -44,9 +46,42 @@ app.post("/api/leads", async (req, res) => {
       phone: phone || "",
       cguAccepted: !!cguAccepted,
       status: "new",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      source: normalizedSource,
+      createdAt: now,
     });
     res.json({ ok: true, id: ref.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/leads", requireAdminKey, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const status = (req.query.status as string) || undefined;
+    const email = (req.query.email as string) || undefined;
+
+    let q: FirebaseFirestore.Query = db.collection("leads").orderBy("createdAt", "desc");
+    if (status) {
+      q = q.where("status", "==", status);
+    }
+    if (email) {
+      q = q.where("email", ">=", email).where("email", "<=", email + "\uf8ff");
+    }
+
+    const snap = await q.offset(offset).limit(limit).get();
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    let total: number | null = null;
+    try {
+      const aggregate = await q.count().get();
+      total = aggregate.data().count || 0;
+    } catch (_err) {
+      total = null;
+    }
+
+    res.json({ ok: true, total, limit, offset, items });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -90,9 +125,10 @@ app.post("/api/admin/approve-lead", requireAdminKey, async (req, res) => {
       return res.status(502).json({ error: body?.error?.message || "sendOobCode failed" });
     }
 
+    const approvedAt = admin.firestore?.FieldValue?.serverTimestamp?.() || Date.now();
     await db.collection("leads").doc(leadId).update({
       status: "approved",
-      approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+      approvedAt,
       authUid: user.uid,
       role,
       installerId,
@@ -111,15 +147,21 @@ app.post("/api/admin/reject-lead", requireAdminKey, async (req, res) => {
     const ref = db.collection("leads").doc(leadId);
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: "lead not found" });
+    const rejectedAt = admin.firestore?.FieldValue?.serverTimestamp?.() || Date.now();
     await ref.update({
       status: "rejected",
       rejectReason: reason || "",
-      rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      rejectedAt,
     });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// SPA fallback must not catch /api/* routes
+app.get(/^\/(?!api\/).*/, (_req, res) => {
+  res.status(404).send("Not Found");
 });
 
 const PORT = process.env.PORT || 8080;

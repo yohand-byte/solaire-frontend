@@ -20,6 +20,7 @@ import FixInstallerIds from "./admin/FixInstallerIds.tsx";
 import { useAuth } from "./hooks/useAuth.tsx";
 import { API_URL } from "./api/client";
 import LoginAdmin from "./admin/LoginAdmin.tsx";
+import { AdminKeyPanel } from "./admin/AdminKey";
 import { HealthDebug } from "./debug/HealthDebug";
 import { MessagesDebug } from "./debug/MessagesDebug";
 import Landing from "./Landing.jsx";
@@ -94,15 +95,20 @@ const FolderIcon = () => (
   </svg>
 );
 
-function useFetch(url, deps = []) {
+function useFetch(url, deps = [], options = {}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   useEffect(() => {
-    if (!url) return;
+    if (!url) {
+      setLoading(false);
+      setData(null);
+      setError(null);
+      return;
+    }
     let mounted = true;
     setLoading(true);
-    fetch(url)
+    fetch(url, { headers: options.headers })
       .then(async (r) => {
         const text = await r.text();
         if (!r.ok) throw new Error(text || `HTTP ${r.status}`);
@@ -158,6 +164,7 @@ function LeadsTable({ leads, onSelect }) {
             <th>Téléphone</th>
             <th>Statut</th>
             <th>Source</th>
+            <th>Date</th>
           </tr>
         </thead>
         <tbody>
@@ -171,8 +178,9 @@ function LeadsTable({ leads, onSelect }) {
               <td>{l.name || '—'}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
-              <td><span className={`badge-status ${l.status || 'nouveau'}`}>{l.status || 'nouveau'}</span></td>
+              <td><span className={`badge-status ${l.status || 'new'}`}>{l.status || 'new'}</span></td>
               <td>{l.source || 'webhook'}</td>
+              <td>{l.createdAt?.seconds ? new Date(l.createdAt.seconds * 1000).toLocaleDateString() : l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -524,15 +532,25 @@ function FileDetail({ file, attachments, setAttachments }) {
 
 function MainApp() {
   const { user, claims, loading: authLoading } = useAuth();
+  const location = useLocation();
   const [leadPage, setLeadPage] = useState(0);
   const [filePage, setFilePage] = useState(0);
-  const [leadPageSize, setLeadPageSize] = useState(20);
+  const [leadPageSize, setLeadPageSize] = useState(50);
   const [filePageSize, setFilePageSize] = useState(20);
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState('dashboard');
+  const [leadTab, setLeadTab] = useState("new");
   const [category, setCategory] = useState('Panneaux photovoltaïques');
   const [market, setMarket] = useState('BtoC');
   const [attachments, setAttachments] = useState({});
+  const [adminKey, setAdminKey] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("ADMIN_API_KEY") || "" : ""));
+  const debugMode = useMemo(() => {
+    try {
+      return new URLSearchParams(location.search || "").get("debug") === "1";
+    } catch (_e) {
+      return false;
+    }
+  }, [location.search]);
   // hydrate attachments depuis localStorage
   useEffect(() => {
     try {
@@ -540,7 +558,16 @@ function MainApp() {
       if (saved) setAttachments(JSON.parse(saved));
     } catch (_e) { /* ignore */ }
   }, []);
-  const { data: leadsResp, loading, error } = useFetch(`${API_BASE}/leads?limit=${leadPageSize}&offset=${leadPage * leadPageSize}`, [reloadKey, leadPage, leadPageSize]);
+  const adminLeadsUrl = adminKey
+    ? `${API_BASE}/admin/leads?limit=${leadPageSize}&offset=${leadPage * leadPageSize}${leadTab !== "all" ? `&status=${leadTab}` : ""}${
+        leadFilters.email ? `&email=${encodeURIComponent(leadFilters.email)}` : ""
+      }`
+    : "";
+  const { data: leadsResp, loading, error } = useFetch(
+    adminLeadsUrl,
+    [reloadKey, leadPage, leadPageSize, leadTab, leadFilters?.email, adminKey],
+    { headers: adminKey ? { "X-ADMIN-KEY": adminKey } : undefined }
+  );
   const { data: clients } = useFetch(`${API_BASE}/clients`, [reloadKey]);
   const { data: filesResp } = useFetch(`${API_BASE}/files?limit=${filePageSize}&offset=${filePage * filePageSize}`, [reloadKey, filePage, filePageSize]);
   const { data: stats } = useFetch(`${API_BASE}/stats`, [reloadKey]);
@@ -553,18 +580,21 @@ function MainApp() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [leadFilters, setLeadFilters] = useState({ status: "", source: "", search: "" });
+  const [leadFilters, setLeadFilters] = useState({ email: "", search: "" });
   const [fileFilters, setFileFilters] = useState({ status: "", pack: "", client: "" });
   const [clientFilters, setClientFilters] = useState({ search: "", pack: "", segment: "" });
   const [previewClient, setPreviewClient] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", status: "nouveau", source: "landing" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "landing" });
   const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
   const [fileForm, setFileForm] = useState({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" });
   const [landingHooked, setLandingHooked] = useState(false);
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingFileId, setEditingFileId] = useState(null);
   const [creatingFileForClient, setCreatingFileForClient] = useState(false);
+  useEffect(() => {
+    setLeadPage(0);
+  }, [leadTab, leadFilters.email, leadFilters.search, leadPageSize]);
   const exportFilesCSV = () => {
     const rows = [
       ["id", "title", "clientId", "status", "pack", "price", "address", "power"]
@@ -619,7 +649,7 @@ function MainApp() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setForm({ name: "", email: "", phone: "", status: "nouveau", source: "landing" });
+      setForm({ name: "", email: "", phone: "", source: "landing" });
       setReloadKey((k) => k + 1);
     } catch (err) {
       alert(`Erreur création: ${err.message}`);
@@ -655,28 +685,31 @@ function MainApp() {
     console.error('Bad files payload', filesResp);
   }
   const leads = Array.isArray(leadsResp?.items) ? leadsResp.items : [];
-  const leadsTotal = typeof leadsResp?.total === 'number' ? leadsResp.total : 0;
+  const leadsTotal = typeof leadsResp?.total === 'number' ? leadsResp.total : (leadsResp?.items?.length || 0);
   const files = Array.isArray(filesResp?.items) ? filesResp.items : [];
   const filesTotal = typeof filesResp?.total === 'number' ? filesResp.total : 0;
-  const landingSnippet = `POST ${API_BASE}/leads
+const landingSnippet = `POST ${API_BASE}/leads
 Headers: Content-Type: application/json
          X-Api-Token: ${API_TOKEN}
-Body: { "name": "...", "email": "...", "phone": "...", "status": "nouveau", "source": "landing" }`;
+Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
 
   const ordered = useMemo(
-    () => (leads || []).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)),
+    () => (leads || []).slice().sort((a, b) => {
+      const aDate = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt || 0);
+      const bDate = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt || 0);
+      return bDate - aDate;
+    }),
     [leads]
   );
   const filteredLeads = useMemo(() => {
     return (ordered || []).filter((l) => {
-      const matchStatus = leadFilters.status ? (l.status || '').toLowerCase() === leadFilters.status : true;
-      const matchSource = leadFilters.source ? (l.source || '').toLowerCase().includes(leadFilters.source.toLowerCase()) : true;
+      const matchEmail = leadFilters.email ? (l.email || "").toLowerCase().includes(leadFilters.email.toLowerCase()) : true;
       const matchSearch = leadFilters.search
-        ? (l.name || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
-          (l.email || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
-          (l.phone || '').toLowerCase().includes(leadFilters.search.toLowerCase())
+        ? (l.name || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+          (l.phone || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+          (l.email || "").toLowerCase().includes(leadFilters.search.toLowerCase())
         : true;
-      return matchStatus && matchSource && matchSearch;
+      return matchEmail && matchSearch;
     });
   }, [ordered, leadFilters]);
 
@@ -778,30 +811,58 @@ Body: { "name": "...", "email": "...", "phone": "...", "status": "nouveau", "sou
       {error && <div className="card">Erreur : {String(error)}</div>}
       {loading && <div className="card">Chargement…</div>}
 
+      {tab === 'leads' && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <AdminKeyPanel onChange={(val) => setAdminKey(val)} />
+          {!adminKey && <div className="small" style={{ color: "#f97316" }}>Renseigne la clé admin pour charger les leads.</div>}
+        </div>
+      )}
+
       {tab === 'leads' && !loading && leads && (
         <div className="grid">
           <div>
             <div className="card">
-              <h3>Leads</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h3>Leads</h3>
+                <div className="tabs">
+                  {[
+                    { key: "new", label: "New" },
+                    { key: "approved", label: "Approved" },
+                    { key: "rejected", label: "Rejected" },
+                    { key: "all", label: "All" },
+                  ].map((t) => (
+                    <button
+                      key={t.key}
+                      className={`pill ${leadTab === t.key ? "active" : ""}`}
+                      onClick={() => setLeadTab(t.key)}
+                      style={{ textTransform: "capitalize" }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="filters">
-                <select value={leadFilters.status} onChange={(e) => setLeadFilters({ ...leadFilters, status: e.target.value })}>
-                  <option value="">Statut (tous)</option>
-                  <option value="nouveau">Nouveau</option>
-                  <option value="en_cours">En cours</option>
-                  <option value="gagne">Gagné</option>
-                  <option value="perdu">Perdu</option>
-                </select>
-                <input placeholder="Source" value={leadFilters.source} onChange={(e) => setLeadFilters({ ...leadFilters, source: e.target.value })} />
+                <input placeholder="Filtrer email" value={leadFilters.email} onChange={(e) => setLeadFilters({ ...leadFilters, email: e.target.value })} />
                 <input placeholder="Recherche nom/email/tel" value={leadFilters.search} onChange={(e) => setLeadFilters({ ...leadFilters, search: e.target.value })} />
                 <select value={leadPageSize} onChange={(e) => { setLeadPageSize(Number(e.target.value)); setLeadPage(0); }}>
-                  {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}/page</option>)}
+                  {[20, 50, 100, 200].map((n) => <option key={n} value={n}>{n}/page</option>)}
                 </select>
               </div>
               <LeadsTable leads={filteredLeads} onSelect={setSelected} />
               <div className="filters" style={{ justifyContent: "space-between" }}>
                 <button className="btn-secondary" disabled={leadPage === 0} onClick={() => setLeadPage((p) => Math.max(0, p - 1))}>Précédent</button>
-                <span>Page {leadPage + 1} / {Math.max(1, Math.ceil(leadsTotal / leadPageSize))} ({leadsTotal} leads)</span>
-                <button className="btn-secondary" disabled={(leadPage + 1) * leadPageSize >= leadsTotal} onClick={() => setLeadPage((p) => p + 1)}>Suivant</button>
+                <span>
+                  Page {leadPage + 1}
+                  {leadsTotal ? ` / ${Math.max(1, Math.ceil(leadsTotal / leadPageSize))}` : ""} ({leadsTotal || filteredLeads.length} leads)
+                </span>
+                <button
+                  className="btn-secondary"
+                  disabled={filteredLeads.length < leadPageSize || (leadsTotal ? (leadPage + 1) * leadPageSize >= leadsTotal : false)}
+                  onClick={() => setLeadPage((p) => p + 1)}
+                >
+                  Suivant
+                </button>
               </div>
             </div>
           </div>
@@ -816,12 +877,6 @@ Body: { "name": "...", "email": "...", "phone": "...", "status": "nouveau", "sou
             <input required placeholder="Nom" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             <input placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="nouveau">Nouveau</option>
-              <option value="en_cours">En cours</option>
-              <option value="gagne">Gagné</option>
-              <option value="perdu">Perdu</option>
-            </select>
             <input placeholder="Source" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} />
             <button type="submit" disabled={creating} className="btn-primary" style={{ gridColumn: "1 / -1" }}>
               {creating ? "Création..." : "Créer le lead"}
@@ -830,9 +885,12 @@ Body: { "name": "...", "email": "...", "phone": "...", "status": "nouveau", "sou
         </div>
       )}
 
-      {tab === 'leads' && !loading && leads && (
+      {tab === 'leads' && debugMode && !loading && leads && (
         <div style={{ marginTop: 16 }}>
-          <Kanban leads={ordered} />
+          <div className="card">
+            <h4>Debug: Kanban local (non productif)</h4>
+            <Kanban leads={ordered} />
+          </div>
         </div>
       )}
 

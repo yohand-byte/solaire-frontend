@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 
-export function AdminKeyPanel() {
+type AdminKeyPanelProps = {
+  onChange?: (value: string) => void;
+};
+
+export function AdminKeyPanel({ onChange }: AdminKeyPanelProps) {
   const [key, setKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
@@ -10,14 +14,17 @@ export function AdminKeyPanel() {
   }, []);
 
   const save = () => {
-    sessionStorage.setItem("ADMIN_API_KEY", key.trim());
+    const next = key.trim();
+    sessionStorage.setItem("ADMIN_API_KEY", next);
     setMessage("Clé admin enregistrée.");
+    if (onChange) onChange(next);
   };
 
   const clear = () => {
     sessionStorage.removeItem("ADMIN_API_KEY");
     setKey("");
     setMessage("Clé admin supprimée.");
+    if (onChange) onChange("");
   };
 
   return (
