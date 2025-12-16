@@ -1,0 +1,6 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [ 'build', '-f', 'Dockerfile.api', '-t', 'europe-west1-docker.pkg.dev/solaire-frontend/solaire-api/app:latest', '.' ]
+images:
+  - 'europe-west1-docker.pkg.dev/solaire-frontend/solaire-api/app:latest'
