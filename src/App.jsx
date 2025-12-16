@@ -1162,14 +1162,16 @@ export default function App() {
         <Route path="/debug/health" element={<HealthDebug />} />
         <Route path="/debug/messages" element={<MessagesDebug />} />
 
-        <Route path="/client/login" element={<ClientLogin />} />
-        <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
-        <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
-        <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
-        <Route path="/espace-client" element={<Navigate to="/client/login" replace />} />
+      <Route path="/client/login" element={<ClientLogin />} />
+      <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
+      <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
+      <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
+      <Route path="/espace-client" element={<Navigate to="/client/login" replace />} />
+      <Route path="/admin/login" element={<LoginAdmin />} />
+      <Route path="/espace-admin" element={<Navigate to="/admin/login" replace />} />
 
-        <Route path="/" element={<Landing />} />
-        <Route path="/*" element={<Navigate to="/" replace />} />
+      <Route path="/" element={<Landing />} />
+      <Route path="/*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   );
