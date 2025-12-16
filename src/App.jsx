@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Routes, Route, Navigate, Link, useNavigate, useParams } from "react-router-dom";
+import { Routes, Route, Navigate, Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { PACKS } from './constants.ts';
 import ClientLogin from "./client/Login.tsx";
 import ClientDashboard from "./client/Dashboard.tsx";
@@ -29,14 +29,22 @@ const API_BASE = API_URL;
 const API_TOKEN = 'saftoken-123';
 
 function ClientEntryBanner() {
+  const location = useLocation();
+  const path = location.pathname || "";
+  const onClient = path.startsWith("/client");
+  const onAdmin = path.startsWith("/admin");
   return (
     <div style={{ background: '#0d1117', color: '#fff', padding: '10px 16px', display: 'flex', justifyContent: 'flex-end', gap: 12, borderBottom: '1px solid #30363d' }}>
-      <Link to="/client/login" className="btn-primary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, background: '#FF9F1C', color: '#0d1117', fontWeight: 700 }}>
-        Espace client
-      </Link>
-      <Link to="/admin/login" className="btn-secondary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid #FF9F1C', color: '#FF9F1C', fontWeight: 600 }}>
-        Espace admin
-      </Link>
+      {!onAdmin && (
+        <Link to="/client/login" className="btn-primary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, background: '#FF9F1C', color: '#0d1117', fontWeight: 700 }}>
+          Espace client
+        </Link>
+      )}
+      {!onClient && (
+        <Link to="/admin/login" className="btn-secondary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid #FF9F1C', color: '#FF9F1C', fontWeight: 600 }}>
+          Espace admin
+        </Link>
+      )}
     </div>
   );
 }
@@ -1177,8 +1185,8 @@ export default function App() {
       <Route path="/espace-admin" element={<Navigate to="/admin/login" replace />} />
       <Route path="/debug/auth" element={<AuthDebug />} />
 
-        <Route path="/" element={<Landing />} />
-        <Route path="/*" element={<Navigate to="/" replace />} />
+        <Route path="/" element={<Navigate to="/client/login" replace />} />
+        <Route path="/*" element={<Navigate to="/client/login" replace />} />
       </Routes>
     </>
   );

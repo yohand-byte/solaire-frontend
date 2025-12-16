@@ -112,8 +112,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="dashboard">
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <button className="btn-secondary" onClick={async () => { await signOut(auth); navigate("/", { replace: true }); }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 8 }}>
+        <button className="btn-secondary" onClick={() => navigate("/admin/login", { replace: true })}>
+          Clé admin
+        </button>
+        <button className="btn-secondary" onClick={async () => { await signOut(auth); navigate("/client/login", { replace: true }); }}>
           Déconnexion
         </button>
       </div>
