@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { auth, fetchUserClaims } from "../lib/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-
-const ADMIN_UID = "yrpmKIwuSydzH8nWMahRlWZictb2";
+import { auth } from "../lib/firestore";
+import { onAuthStateChanged, getIdTokenResult } from "firebase/auth";
 
 export function useAuth() {
   const [user, setUser] = useState<any>(null);
@@ -20,23 +18,14 @@ export function useAuth() {
         return;
       }
       try {
-        const data = await fetchUserClaims(u.uid);
-        if (u.uid === ADMIN_UID) {
-          const adminClaims = { role: "admin", installerId: "ADMIN", ...(data || {}) };
-          setClaims(adminClaims);
-          setRole("admin");
-        } else if (data) {
-          setClaims(data);
-          setRole(data.role || "client");
-        } else {
-          setClaims({ role: "client" });
-          setRole("client");
-        }
+        const token = await getIdTokenResult(u, true);
+        const c = token.claims;
+        setClaims(c);
+        setRole((c.role as string) || null);
       } catch (err) {
-        setClaims({ role: "client" });
-        setRole("client");
+        setClaims(null);
+        setRole(null);
       } finally {
-        console.log("[useAuth] user=", u?.uid, u?.email);
         setLoading(false);
       }
     });

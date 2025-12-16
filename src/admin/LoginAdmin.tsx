@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { auth, fetchUserClaims } from "../lib/firestore";
+import { auth } from "../lib/firestore";
+import { routeAfterLogin } from "../routing/afterLogin";
 
 export default function LoginAdmin() {
   const [email, setEmail] = useState("");
@@ -14,14 +15,7 @@ export default function LoginAdmin() {
     setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, pw);
-      const claims = await fetchUserClaims(cred.user.uid);
-      if (claims?.role !== "admin") {
-        setErr("Accès admin requis.");
-        await signOut(auth);
-        setLoading(false);
-        return;
-      }
-      window.location.href = "/dashboard";
+      await routeAfterLogin(cred.user);
     } catch (er: any) {
       setErr(er.message);
     } finally {

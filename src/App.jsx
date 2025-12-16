@@ -7,6 +7,7 @@ import ClientFiles from "./client/Files.tsx";
 import ClientFileDetail from "./client/FileDetail.tsx";
 import { ClientRoute } from "./client/ClientRoute.tsx";
 import Onboarding from "./client/Onboarding.tsx";
+import Pending from "./client/Pending.tsx";
 import AdminDashboard from "./admin/AdminDashboard.tsx";
 import AdminFileDetail from "./admin/AdminFileDetail.tsx";
 import AdminPlanning from "./admin/AdminPlanning.tsx";
@@ -1152,40 +1153,40 @@ export default function App() {
     <>
       <ClientEntryBanner />
       <Routes>
-        <Route path="/login" element={<LoginAdmin />} />
-        <Route path="/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-        <Route path="/dossiers/:id" element={<AdminRoute><AdminFileDetail /></AdminRoute>} />
-        <Route path="/planning" element={<AdminRoute><AdminPlanning /></AdminRoute>} />
-        <Route path="/operator" element={<AdminRoute><OperatorBoard /></AdminRoute>} />
-        <Route path="/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
-        <Route path="/dev/seed" element={<AdminRoute><DevSeed /></AdminRoute>} />
+        <Route path="/admin/login" element={<LoginAdmin />} />
+        <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/dossiers/:id" element={<AdminRoute><AdminFileDetail /></AdminRoute>} />
+        <Route path="/admin/planning" element={<AdminRoute><AdminPlanning /></AdminRoute>} />
+        <Route path="/admin/operator" element={<AdminRoute><OperatorBoard /></AdminRoute>} />
+        <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
+        <Route path="/admin/dev/seed" element={<AdminRoute><DevSeed /></AdminRoute>} />
         <Route path="/admin/fix-installer" element={<AdminRoute><FixInstallerIds /></AdminRoute>} />
-        <Route path="/debug/health" element={<HealthDebug />} />
-        <Route path="/debug/messages" element={<MessagesDebug />} />
+        <Route path="/admin/debug/health" element={<AdminRoute><HealthDebug /></AdminRoute>} />
+        <Route path="/admin/debug/messages" element={<AdminRoute><MessagesDebug /></AdminRoute>} />
 
-      <Route path="/client/login" element={<ClientLogin />} />
+        <Route path="/client/login" element={<ClientLogin />} />
       <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
       <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
       <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
       <Route path="/client/onboarding" element={<ClientRoute><Onboarding /></ClientRoute>} />
+      <Route path="/client/pending" element={<Pending />} />
       <Route path="/espace-client" element={<Navigate to="/client/login" replace />} />
-      <Route path="/admin/login" element={<LoginAdmin />} />
+      <Route path="/login" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/espace-admin" element={<Navigate to="/admin/login" replace />} />
 
-      <Route path="/" element={<Landing />} />
-      <Route path="/*" element={<Navigate to="/" replace />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   );
 }
 
 function AdminRoute({ children }) {
-  const { user, loading } = useAuth();
-
-  if (loading || !user) {
-    return <div className="page-loader">Chargement de la session…</div>;
+  const { user, loading, role } = useAuth();
+  if (loading) return <div className="page-loader">Chargement…</div>;
+  if (!user || role !== "admin") {
+    return <Navigate to="/admin/login" replace />;
   }
-
-  // En mode dev très permissif : dès qu'un user existe, on laisse passer
   return children;
 }
