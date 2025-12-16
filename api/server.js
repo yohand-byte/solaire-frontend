@@ -159,10 +159,5 @@ app.post("/api/admin/reject-lead", requireAdminKey, async (req, res) => {
   }
 });
 
-// SPA fallback must not catch /api/* routes
-app.get(/^\/(?!api\/).*/, (_req, res) => {
-  res.status(404).send("Not Found");
-});
-
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`API running on :${PORT}`));
