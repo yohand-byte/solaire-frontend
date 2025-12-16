@@ -23,6 +23,7 @@ import LoginAdmin from "./admin/LoginAdmin.tsx";
 import { HealthDebug } from "./debug/HealthDebug";
 import { MessagesDebug } from "./debug/MessagesDebug";
 import Landing from "./Landing.jsx";
+import { AuthDebug } from "./debug/AuthDebug";
 
 const API_BASE = API_URL;
 const API_TOKEN = 'saftoken-123';
@@ -1174,6 +1175,7 @@ export default function App() {
       <Route path="/login" element={<Navigate to="/admin/login" replace />} />
       <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/espace-admin" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/debug/auth" element={<AuthDebug />} />
 
         <Route path="/" element={<Landing />} />
         <Route path="/*" element={<Navigate to="/" replace />} />

@@ -6,13 +6,34 @@ import {
 } from "firebase/firestore";
 import { PACKS } from "../constants";
 
-const firebaseConfig = {
+const env = import.meta.env;
+
+const fallbackConfig = {
   apiKey: "AIzaSyBc1cYCEqFVXvB2YdxHTxhVlPqtTbfVVLM",
   authDomain: "solaire-frontend.firebaseapp.com",
   projectId: "solaire-frontend",
   storageBucket: "solaire-frontend.firebasestorage.app",
   messagingSenderId: "29459740400",
   appId: "1:29459740400:web:2fa88c891fece254c8f435",
+};
+
+function requireEnv(key: string, fallback?: string) {
+  const value = env[key];
+  if (value) return value;
+  if (fallback) {
+    console.warn(`[firebase] missing ${key}, using fallback`);
+    return fallback;
+  }
+  throw new Error(`[firebase] missing required env ${key}`);
+}
+
+const firebaseConfig = {
+  apiKey: requireEnv("VITE_FIREBASE_API_KEY", fallbackConfig.apiKey),
+  authDomain: requireEnv("VITE_FIREBASE_AUTH_DOMAIN", fallbackConfig.authDomain),
+  projectId: requireEnv("VITE_FIREBASE_PROJECT_ID", fallbackConfig.projectId),
+  storageBucket: requireEnv("VITE_FIREBASE_STORAGE_BUCKET", fallbackConfig.storageBucket),
+  messagingSenderId: requireEnv("VITE_FIREBASE_MESSAGING_SENDER_ID", fallbackConfig.messagingSenderId),
+  appId: requireEnv("VITE_FIREBASE_APP_ID", fallbackConfig.appId),
 };
 
 export const app = initializeApp(firebaseConfig);
