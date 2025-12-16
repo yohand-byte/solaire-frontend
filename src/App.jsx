@@ -6,6 +6,7 @@ import ClientDashboard from "./client/Dashboard.tsx";
 import ClientFiles from "./client/Files.tsx";
 import ClientFileDetail from "./client/FileDetail.tsx";
 import { ClientRoute } from "./client/ClientRoute.tsx";
+import Onboarding from "./client/Onboarding.tsx";
 import AdminDashboard from "./admin/AdminDashboard.tsx";
 import AdminFileDetail from "./admin/AdminFileDetail.tsx";
 import AdminPlanning from "./admin/AdminPlanning.tsx";
@@ -1166,6 +1167,7 @@ export default function App() {
       <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
       <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
       <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
+      <Route path="/client/onboarding" element={<ClientRoute><Onboarding /></ClientRoute>} />
       <Route path="/espace-client" element={<Navigate to="/client/login" replace />} />
       <Route path="/admin/login" element={<LoginAdmin />} />
       <Route path="/espace-admin" element={<Navigate to="/admin/login" replace />} />
