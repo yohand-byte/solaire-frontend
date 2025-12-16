@@ -33,7 +33,7 @@ function ClientEntryBanner() {
       <Link to="/client/login" className="btn-primary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, background: '#FF9F1C', color: '#0d1117', fontWeight: 700 }}>
         Espace client
       </Link>
-      <Link to="/login" className="btn-secondary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid #FF9F1C', color: '#FF9F1C', fontWeight: 600 }}>
+      <Link to="/admin/login" className="btn-secondary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid #FF9F1C', color: '#FF9F1C', fontWeight: 600 }}>
         Espace admin
       </Link>
     </div>
