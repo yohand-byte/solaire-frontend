@@ -25,9 +25,10 @@ app.use(
   })
 );
 
-app.get("/healthz", (_req, res) => {
-  res.json({ ok: true, status: "healthy" });
-});
+const healthHandler = (_req, res) => res.json({ ok: true, status: "healthy" });
+app.get("/", healthHandler);
+app.get("/healthz", healthHandler);
+app.get("/api/healthz", healthHandler);
 
 app.post("/api/leads", async (req, res) => {
   try {
