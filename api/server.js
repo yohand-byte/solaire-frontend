@@ -117,10 +117,5 @@ app.post("/api/admin/reject-lead", async (req, res) => {
   }
 });
 
-const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`API running on :${port}`));
-
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log("API listening on port", PORT);
-});
+app.listen(PORT, () => console.log(`API running on :${PORT}`));
