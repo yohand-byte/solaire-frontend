@@ -92,12 +92,13 @@ app.post("/api/admin/approve-lead", requireAdminKey, async (req, res) => {
 
     await db.collection("leads").doc(leadId).update({
       status: "approved",
-      installerId,
-      userId: user.uid,
       approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+      authUid: user.uid,
+      role,
+      installerId,
     });
 
-    res.json({ ok: true, email });
+    res.json({ ok: true, email, uid: user.uid, role, installerId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
