@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firestore";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { routeAfterLogin } from "../routing/afterLogin";
 
 export default function ClientLogin() {
   const navigate = useNavigate();
@@ -16,9 +17,8 @@ export default function ClientLogin() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Une fois connecté, on envoie vers le dashboard client
-      navigate("/client/dashboard");
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      await routeAfterLogin(cred.user, navigate);
     } catch (err: any) {
       console.error("Erreur login client:", err);
       setError(err?.message || "Connexion impossible");
