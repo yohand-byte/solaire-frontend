@@ -43,3 +43,5 @@ Le bundle est produit dans `dist/` (utilisé pour Pages/hosting).
 
 ## 🔗 Déploiement (GH Pages / hosting)
 - Voir DEPLOYMENT.md pour les étapes GH Pages.
+
+<!-- rebuild pages -->
