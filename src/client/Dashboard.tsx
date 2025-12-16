@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
+import { signOut } from "firebase/auth";
+import { auth } from "../lib/firestore";
 
 export default function ClientDashboard() {
   const { data: files, loading } = useCollection("files");
@@ -18,6 +20,11 @@ export default function ClientDashboard() {
 
   return (
     <div className="card">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <button className="btn-secondary" onClick={async () => { await signOut(auth); window.location.href = "/"; }}>
+          Déconnexion
+        </button>
+      </div>
       <h3>Mon tableau de bord</h3>
       <div className="cards">
         <div className="metric">

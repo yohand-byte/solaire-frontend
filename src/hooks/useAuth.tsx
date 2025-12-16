@@ -15,6 +15,7 @@ export function useAuth() {
         setClaims(null);
         setRole(null);
         setLoading(false);
+        console.log("[AUTH]", null, null, window.location.pathname);
         return;
       }
       try {
@@ -22,6 +23,7 @@ export function useAuth() {
         const c = token.claims;
         setClaims(c);
         setRole((c.role as string) || null);
+        console.log("[AUTH]", u.uid, c.role, window.location.pathname);
       } catch (err) {
         setClaims(null);
         setRole(null);

@@ -7,7 +7,7 @@ export const ClientRoute = ({ children }: { children: JSX.Element }) => {
   if (loading) return null;
   if (!user) return <Navigate to="/client/login" replace />;
 
-  if (role !== "installer") return <Navigate to="/client/pending" replace />;
+  if (role !== "installer") return <Navigate to="/client/login" replace />;
 
   return children;
 };

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { auth } from "../lib/firestore";
 import { PACKS } from "../constants";
 import { useCollection } from "../hooks/useCollection";
 
@@ -110,6 +112,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="dashboard">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button className="btn-secondary" onClick={async () => { await signOut(auth); navigate("/", { replace: true }); }}>
+          Déconnexion
+        </button>
+      </div>
       <div className="cards">
         <div className="metric">
           <div className="metric-header">
