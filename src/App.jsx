@@ -25,6 +25,19 @@ import Landing from "./Landing.jsx";
 const API_BASE = API_URL;
 const API_TOKEN = 'saftoken-123';
 
+function ClientEntryBanner() {
+  return (
+    <div style={{ background: '#0d1117', color: '#fff', padding: '10px 16px', display: 'flex', justifyContent: 'flex-end', gap: 12, borderBottom: '1px solid #30363d' }}>
+      <Link to="/client/login" className="btn-primary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, background: '#FF9F1C', color: '#0d1117', fontWeight: 700 }}>
+        Espace client
+      </Link>
+      <Link to="/login" className="btn-secondary" style={{ textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid #FF9F1C', color: '#FF9F1C', fontWeight: 600 }}>
+        Espace admin
+      </Link>
+    </div>
+  );
+}
+
 const HomeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 9.5 12 3l9 6.5" />
@@ -1135,26 +1148,30 @@ Body: { "name": "...", "email": "...", "phone": "...", "status": "nouveau", "sou
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginAdmin />} />
-      <Route path="/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-      <Route path="/dossiers/:id" element={<AdminRoute><AdminFileDetail /></AdminRoute>} />
-      <Route path="/planning" element={<AdminRoute><AdminPlanning /></AdminRoute>} />
-      <Route path="/operator" element={<AdminRoute><OperatorBoard /></AdminRoute>} />
-      <Route path="/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
-      <Route path="/dev/seed" element={<AdminRoute><DevSeed /></AdminRoute>} />
-      <Route path="/admin/fix-installer" element={<AdminRoute><FixInstallerIds /></AdminRoute>} />
-      <Route path="/debug/health" element={<HealthDebug />} />
-      <Route path="/debug/messages" element={<MessagesDebug />} />
+    <>
+      <ClientEntryBanner />
+      <Routes>
+        <Route path="/login" element={<LoginAdmin />} />
+        <Route path="/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/dossiers/:id" element={<AdminRoute><AdminFileDetail /></AdminRoute>} />
+        <Route path="/planning" element={<AdminRoute><AdminPlanning /></AdminRoute>} />
+        <Route path="/operator" element={<AdminRoute><OperatorBoard /></AdminRoute>} />
+        <Route path="/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
+        <Route path="/dev/seed" element={<AdminRoute><DevSeed /></AdminRoute>} />
+        <Route path="/admin/fix-installer" element={<AdminRoute><FixInstallerIds /></AdminRoute>} />
+        <Route path="/debug/health" element={<HealthDebug />} />
+        <Route path="/debug/messages" element={<MessagesDebug />} />
 
-      <Route path="/client/login" element={<ClientLogin />} />
-      <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
-      <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
-      <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
+        <Route path="/client/login" element={<ClientLogin />} />
+        <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
+        <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
+        <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
+        <Route path="/espace-client" element={<Navigate to="/client/login" replace />} />
 
-      <Route path="/" element={<Landing />} />
-      <Route path="/*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 
