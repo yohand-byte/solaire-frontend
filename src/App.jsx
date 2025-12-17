@@ -8,6 +8,19 @@ const formatDate = (ts) => {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("fr-FR");
 };
+const tsToDate = (ts) => {
+  if (!ts) return null;
+  const d = ts?._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+const PACK_OPTIONS = [
+  { code: "ESSENTIEL", label: "Essentiel", price: 169 },
+  { code: "PRO", label: "Pro", price: 269 },
+  { code: "SERENITE", label: "Sérénité", price: 449 },
+  { code: "FLEX", label: "Flex", price: null },
+];
+const packLabel = (item) => item?.packLabel || item?.pack || item?.packCode || "—";
+const packPrice = (item) => (item?.packPrice ?? item?.price ?? "—");
 
 const HomeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -130,8 +143,8 @@ function LeadsTable({ leads, onSelect }) {
               <td>{l.company || l.companyName || '—'}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
-              <td>{l.pack || '—'}</td>
-              <td>{l.price ?? '—'}</td>
+              <td>{packLabel(l)}</td>
+              <td>{packPrice(l)}</td>
               <td>{formatDate(l.createdAt)}</td>
               <td><span className={`badge-status ${l.status || 'nouveau'}`}>{l.status || 'nouveau'}</span></td>
               <td>{l.source || 'webhook'}</td>
@@ -172,7 +185,7 @@ function LeadDetail({ lead, clientsById }) {
       <h3>{lead.name || 'Sans nom'}</h3>
       <div className="small">{lead.company || lead.companyName || '—'}</div>
       <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
-      <div className="small">Pack : {lead.pack || '—'} · Prix : {lead.price ?? '—'} €</div>
+      <div className="small">Pack : {packLabel(lead)} · Prix : {packPrice(lead)} €</div>
       <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
       <div className="badge" style={{ marginTop: 8 }}>{lead.status || 'nouveau'}</div>
       {linkedClientLabel && <div className="pill" style={{ marginTop: 6 }}>Client lié : {linkedClientLabel}</div>}
@@ -206,13 +219,17 @@ function ClientDetail({ client, onCreatedFile }) {
   const createFileForClient = async () => {
     setCreatingFile(true);
     try {
+      const sel = PACK_OPTIONS.find((p) => p.code === (client.packCode || client.pack)) || PACK_OPTIONS[0];
       const res = await fetch(`${API_BASE}/files`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
         body: JSON.stringify({
           title: `Dossier ${client.name || client.id}`,
           clientId: client.id,
-          pack: client.pack || "validation",
+          packCode: sel.code,
+          packLabel: sel.label,
+          packPrice: sel.price,
+          pack: sel.code,
           status: "en_cours",
           source: "client-conversion",
         }),
@@ -232,7 +249,7 @@ function ClientDetail({ client, onCreatedFile }) {
       <h3>{client.name || client.company || 'Sans nom'}</h3>
       <div className="small">{client.company || '—'}</div>
       <div className="small">{client.email || '—'} · {client.phone || '—'}</div>
-      <div className="pill" style={{ marginTop: 6 }}>{client.pack || 'validation'} • {client.segment || 'small'} • {client.status || 'actif'}</div>
+      <div className="pill" style={{ marginTop: 6 }}>{packLabel(client)} • {packPrice(client)} € • {client.segment || 'small'} • {client.status || 'actif'}</div>
       <div style={{ marginTop: 8 }}>
         <button disabled={creatingFile} onClick={createFileForClient} className="btn-primary">
           {creatingFile ? "Création..." : "Créer un dossier pour ce client"}
@@ -266,7 +283,13 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
     : '—';
 
   useEffect(() => {
-    setForm(file || {});
+    if (!file) { setForm({}); return; }
+    setForm({
+      ...file,
+      packCode: file.packCode || file.pack || "",
+      packLabel: file.packLabel || file.pack || "",
+      packPrice: file.packPrice ?? file.price ?? "",
+    });
   }, [file]);
 
   if (!file) return <div className="card">Sélectionne un dossier</div>;
@@ -374,7 +397,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
       const res = await fetch(`${API_BASE}/files/${file.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, pack: form.packCode }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
@@ -397,7 +420,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
         </div>
         <div className="info-chip">
           <div className="mini-label">Pack</div>
-          <div className="mini-value">{file.pack || 'validation'}</div>
+          <div className="mini-value">{packLabel(file)}</div>
         </div>
         <div className="info-chip">
           <div className="mini-label">Client</div>
@@ -405,7 +428,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
         </div>
         <div className="info-chip">
           <div className="mini-label">Prix</div>
-          <div className="mini-value">{file.price || '—'}</div>
+          <div className="mini-value">{packPrice(file)}</div>
         </div>
       </div>
       <div className="small">Puissance : {file.power || '—'} | Adresse : {file.address || '—'}</div>
@@ -420,10 +443,13 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
         </label>
         <label>
           <span>Pack</span>
-          <select value={form.pack || 'validation'} onChange={(e) => setForm({ ...form, pack: e.target.value })}>
-            <option value="validation">Validation</option>
-            <option value="mise_en_service">Mise en service</option>
-            <option value="zero_stress">Zéro Stress</option>
+          <select value={form.packCode || 'ESSENTIEL'} onChange={(e) => {
+            const sel = PACK_OPTIONS.find((p) => p.code === e.target.value) || PACK_OPTIONS[0];
+            setForm({ ...form, packCode: sel.code, packLabel: sel.label, packPrice: sel.price });
+          }}>
+            {PACK_OPTIONS.map((p) => (
+              <option key={p.code} value={p.code}>{p.label}</option>
+            ))}
           </select>
         </label>
         <label>
@@ -436,7 +462,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
         </label>
         <label>
           <span>Prix €</span>
-          <input placeholder="Prix €" value={form.price || ''} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+          <input placeholder="Prix €" value={form.packPrice ?? form.price ?? ''} onChange={(e) => setForm({ ...form, packPrice: e.target.value })} />
         </label>
         <label>
           <span>Adresse</span>
@@ -586,9 +612,9 @@ export default function App() {
   const [clientFilters, setClientFilters] = useState({ search: "", pack: "", segment: "" });
   const [previewClient, setPreviewClient] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
-  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", volume: "", pack: "validation", price: "", status: "nouveau", source: "landing" });
-  const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
-  const [fileForm, setFileForm] = useState({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "" });
+  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", volume: "", packCode: "ESSENTIEL", packLabel: "Essentiel", packPrice: 169, flexItems: [], status: "nouveau", source: "landing" });
+  const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", packCode: "ESSENTIEL", packLabel: "Essentiel", packPrice: 169, segment: "small", status: "actif" });
+  const [fileForm, setFileForm] = useState({ title: "", clientId: "", packCode: "ESSENTIEL", packLabel: "Essentiel", packPrice: 169, price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "" });
   const [landingHooked, setLandingHooked] = useState(false);
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingFileId, setEditingFileId] = useState(null);
@@ -603,8 +629,8 @@ export default function App() {
         f.title || "",
         f.clientId || "",
         f.status || "",
-        f.pack || "",
-        f.price || "",
+        packLabel(f) || "",
+        packPrice(f) || "",
         f.address || "",
         f.power || ""
       ]);
@@ -627,8 +653,10 @@ export default function App() {
     setFileForm({
       title: `Dossier ${client.name || client.id}`,
       clientId: client.id,
-      pack: client.pack || "validation",
-      price: "",
+          packCode: client.packCode || PACK_OPTIONS[0].code,
+          packLabel: client.packLabel || client.pack || PACK_OPTIONS[0].label,
+          packPrice: client.packPrice ?? client.price ?? PACK_OPTIONS[0].price,
+          price: client.packPrice ?? client.price ?? "",
       status: "en_cours",
       address: "",
       power: "",
@@ -651,14 +679,20 @@ export default function App() {
     e.preventDefault();
     setCreating(true);
     try {
+      const selectedPack = PACK_OPTIONS.find((p) => p.code === form.packCode) || PACK_OPTIONS[0];
       const res = await fetch(`${API_BASE}/leads`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          packCode: selectedPack.code,
+          packLabel: selectedPack.label,
+          packPrice: selectedPack.price,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setForm({ name: "", company: "", email: "", phone: "", volume: "", pack: "validation", price: "", status: "nouveau", source: "landing" });
+      setForm({ name: "", company: "", email: "", phone: "", volume: "", packCode: "ESSENTIEL", packLabel: "Essentiel", packPrice: 169, flexItems: [], status: "nouveau", source: "landing" });
       setReloadKey((k) => k + 1);
     } catch (err) {
       alert(`Erreur création: ${err.message}`);
@@ -671,14 +705,22 @@ export default function App() {
     e.preventDefault();
     setCreating(true);
     try {
+      const sel = PACK_OPTIONS.find((p) => p.code === (clientForm.packCode || clientForm.pack)) || PACK_OPTIONS[0];
       const res = await fetch(`${API_BASE}/clients`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
-        body: JSON.stringify({ ...clientForm, id: editingClientId || undefined }),
+        body: JSON.stringify({
+          ...clientForm,
+          id: editingClientId || undefined,
+          packCode: sel.code,
+          packLabel: sel.label,
+          packPrice: sel.price,
+          pack: sel.code,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setClientForm({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
+      setClientForm({ name: "", email: "", phone: "", company: "", packCode: "ESSENTIEL", packLabel: "Essentiel", packPrice: 169, segment: "small", status: "actif" });
       setEditingClientId(null);
       setReloadKey((k) => k + 1);
     } catch (err) {
@@ -700,7 +742,7 @@ export default function App() {
 const landingSnippet = `POST ${API_BASE}/leads
 Headers: Content-Type: application/json
          X-Api-Token: ${API_TOKEN}
-Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume": "...", "pack": "...", "source": "landing-diagnostic-v3" }`;
+Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume": "...", "packCode": "ESSENTIEL|PRO|SERENITE|FLEX", "packLabel": "...", "packPrice": 169, "flexItems": [], "source": "landing-diagnostic-v3" }`;
 
   const ordered = useMemo(
     () => (leads || []).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)),
@@ -728,7 +770,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
   const filteredFiles = useMemo(() => {
     return (files || []).filter((f) => {
       const matchStatus = fileFilters.status ? (f.status || '').toLowerCase() === fileFilters.status : true;
-      const matchPack = fileFilters.pack ? (f.pack || '').toLowerCase() === fileFilters.pack : true;
+      const matchPack = fileFilters.pack ? (f.packCode || f.pack || '').toLowerCase() === fileFilters.pack : true;
       const clientLabel = clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || '';
       const matchClient = fileFilters.client ? clientLabel.toLowerCase().includes(fileFilters.client.toLowerCase()) : true;
       return matchStatus && matchPack && matchClient;
@@ -744,7 +786,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
           (c.email || '').toLowerCase().includes(q) ||
           (c.phone || '').toLowerCase().includes(q)
         : true;
-      const matchPack = clientFilters.pack ? (c.pack || '').toLowerCase() === clientFilters.pack : true;
+      const matchPack = clientFilters.pack ? (c.packCode || c.pack || '').toLowerCase() === clientFilters.pack : true;
       const matchSegment = clientFilters.segment ? (c.segment || '').toLowerCase() === clientFilters.segment : true;
       return matchSearch && matchPack && matchSegment;
     });
@@ -866,12 +908,18 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
             <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             <input placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             <input placeholder="Volume (installations/mois)" value={form.volume} onChange={(e) => setForm({ ...form, volume: e.target.value })} />
-            <select value={form.pack || "validation"} onChange={(e) => setForm({ ...form, pack: e.target.value })}>
-              <option value="validation">Validation</option>
-              <option value="mise_en_service">Mise en service</option>
-              <option value="zero_stress">Zéro Stress</option>
+            <select
+              value={form.packCode}
+              onChange={(e) => {
+                const sel = PACK_OPTIONS.find((p) => p.code === e.target.value) || PACK_OPTIONS[0];
+                setForm({ ...form, packCode: sel.code, packLabel: sel.label, packPrice: sel.price });
+              }}
+            >
+              {PACK_OPTIONS.map((p) => (
+                <option key={p.code} value={p.code}>{p.label}</option>
+              ))}
             </select>
-            <input placeholder="Prix €" value={form.price || ''} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+            <input placeholder="Prix €" value={form.packPrice ?? ''} onChange={(e) => setForm({ ...form, packPrice: e.target.value })} />
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               <option value="nouveau">Nouveau</option>
               <option value="en_cours">En cours</option>
@@ -903,9 +951,9 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               <input placeholder="Recherche nom/entreprise/email/tel" value={clientFilters.search} onChange={(e) => setClientFilters({ ...clientFilters, search: e.target.value })} />
               <select value={clientFilters.pack} onChange={(e) => setClientFilters({ ...clientFilters, pack: e.target.value })}>
                 <option value="">Pack (tous)</option>
-                <option value="validation">Validation</option>
-                <option value="mise_en_service">Mise en service</option>
-                <option value="zero_stress">Zéro Stress</option>
+                {PACK_OPTIONS.map((p) => (
+                  <option key={p.code} value={p.code.toLowerCase()}>{p.label}</option>
+                ))}
               </select>
               <select value={clientFilters.segment} onChange={(e) => setClientFilters({ ...clientFilters, segment: e.target.value })}>
                 <option value="">Segment (tous)</option>
@@ -942,15 +990,15 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                       <td>{c.company || "—"}</td>
                       <td>{c.email || "—"}</td>
                       <td>{c.phone || "—"}</td>
-                      <td>{c.pack || "validation"}</td>
-                      <td>{c.price ?? "—"}</td>
+                      <td>{packLabel(c)}</td>
+                      <td>{packPrice(c)}</td>
                       <td>{formatDate(c.createdAt)}</td>
                       <td>{c.segment || "small"}</td>
                       <td><span className={`status-badge ${c.status || 'actif'}`}>{c.status || 'actif'}</span></td>
                       <td>
                         <div className="actions" onClick={(e) => e.stopPropagation()}>
                           <button className="btn-icon view" title="Voir la fiche" aria-label="Voir" onClick={() => { setSelectedClient(c); setPreviewClient(c); }}><EyeIcon /> Voir</button>
-                          <button className="btn-icon edit" title="Éditer" aria-label="Éditer" onClick={() => { setClientForm({ name: c.name || "", email: c.email || "", phone: c.phone || "", company: c.company || "", pack: c.pack || "validation", segment: c.segment || "small", status: c.status || "actif" }); setEditingClientId(c.id); }}><EditIcon /> Éditer</button>
+                          <button className="btn-icon edit" title="Éditer" aria-label="Éditer" onClick={() => { setClientForm({ name: c.name || "", email: c.email || "", phone: c.phone || "", company: c.company || "", packCode: c.packCode || PACK_OPTIONS[0].code, packLabel: c.packLabel || c.pack || PACK_OPTIONS[0].label, packPrice: c.packPrice ?? c.price ?? PACK_OPTIONS[0].price, segment: c.segment || "small", status: c.status || "actif" }); setEditingClientId(c.id); }}><EditIcon /> Éditer</button>
                           <button className="btn-icon file" title="Créer un dossier pour ce client" aria-label="Créer dossier" onClick={() => createFileForClient(c)}><FolderIcon /> Dossier</button>
                         </div>
                       </td>
@@ -968,10 +1016,13 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               <input placeholder="Email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} />
               <input placeholder="Téléphone" value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} />
               <input placeholder="Société" value={clientForm.company} onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })} />
-              <select value={clientForm.pack} onChange={(e) => setClientForm({ ...clientForm, pack: e.target.value })}>
-                <option value="validation">Validation</option>
-                <option value="mise_en_service">Mise en service</option>
-                <option value="zero_stress">Zéro Stress</option>
+              <select value={clientForm.packCode} onChange={(e) => {
+                const sel = PACK_OPTIONS.find((p) => p.code === e.target.value) || PACK_OPTIONS[0];
+                setClientForm({ ...clientForm, packCode: sel.code, packLabel: sel.label, packPrice: sel.price });
+              }}>
+                {PACK_OPTIONS.map((p) => (
+                  <option key={p.code} value={p.code}>{p.label}</option>
+                ))}
               </select>
               <select value={clientForm.segment} onChange={(e) => setClientForm({ ...clientForm, segment: e.target.value })}>
                 <option value="small">Petit</option>
@@ -1004,9 +1055,9 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               </select>
               <select value={fileFilters.pack} onChange={(e) => setFileFilters({ ...fileFilters, pack: e.target.value })}>
                 <option value="">Pack (tous)</option>
-                <option value="validation">Validation</option>
-                <option value="mise_en_service">Mise en service</option>
-                <option value="zero_stress">Zéro Stress</option>
+                {PACK_OPTIONS.map((p) => (
+                  <option key={p.code} value={p.code.toLowerCase()}>{p.label}</option>
+                ))}
               </select>
               <input placeholder="Client / Entreprise" value={fileFilters.client} onChange={(e) => setFileFilters({ ...fileFilters, client: e.target.value })} />
               <select value={filePageSize} onChange={(e) => { setFilePageSize(Number(e.target.value)); setFilePage(0); }}>
@@ -1037,13 +1088,13 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                     onClick={() => setSelectedFile(f)}
                     style={{ cursor: "pointer" }}
                     >
-                      <td>{f.title || "—"}</td>
-                      <td>{clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || "—"}</td>
-                      <td><span className={`badge-status ${f.status || 'en_cours'}`}>{f.status || "en_cours"}</span></td>
-                  <td>{f.pack || "validation"}</td>
-                  <td>{f.price || "—"}</td>
+                    <td>{f.title || "—"}</td>
+                    <td>{clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || "—"}</td>
+                    <td><span className={`badge-status ${f.status || 'en_cours'}`}>{f.status || "en_cours"}</span></td>
+                  <td>{packLabel(f)}</td>
+                  <td>{packPrice(f)}</td>
                   <td>{formatDate(f.createdAt)}</td>
-                      <td>
+                    <td>
                     <div className="actions" onClick={(e) => e.stopPropagation()}>
                         <button className="btn-icon view" title="Voir le dossier" aria-label="Voir" onClick={() => { setSelectedFile(f); setPreviewFile(f); }}><EyeIcon /> Voir</button>
                         <button
@@ -1055,8 +1106,10 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                             setFileForm({
                               title: f.title || "",
                               clientId: f.clientId || "",
-                              pack: f.pack || "validation",
-                              price: f.price || "",
+                              packCode: f.packCode || PACK_OPTIONS[0].code,
+                              packLabel: f.packLabel || f.pack || PACK_OPTIONS[0].label,
+                              packPrice: f.packPrice ?? f.price ?? PACK_OPTIONS[0].price,
+                              price: f.packPrice ?? f.price ?? "",
                               status: f.status || "en_cours",
                               address: f.address || "",
                               power: f.power || "",
@@ -1093,7 +1146,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
             const res = await fetch(`${API_BASE}/files`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
-              body: JSON.stringify({ ...fileForm, id: editingFileId || undefined }),
+              body: JSON.stringify({ ...fileForm, id: editingFileId || undefined, pack: fileForm.packCode }),
             });
             const body = await res.json();
             if (!res.ok) throw new Error(body?.error || res.statusText);
@@ -1108,17 +1161,20 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
         }} className="two-cols" id="file-form">
               <input required placeholder="Titre dossier" value={fileForm.title} onChange={(e) => setFileForm({ ...fileForm, title: e.target.value })} />
               <input placeholder="Client ID" value={fileForm.clientId} onChange={(e) => setFileForm({ ...fileForm, clientId: e.target.value })} />
-              <select value={fileForm.pack} onChange={(e) => setFileForm({ ...fileForm, pack: e.target.value })}>
-                <option value="validation">Validation</option>
-                <option value="mise_en_service">Mise en service</option>
-                <option value="zero_stress">Zéro Stress</option>
+              <select value={fileForm.packCode} onChange={(e) => {
+                const sel = PACK_OPTIONS.find((p) => p.code === e.target.value) || PACK_OPTIONS[0];
+                setFileForm({ ...fileForm, packCode: sel.code, packLabel: sel.label, packPrice: sel.price });
+              }}>
+                {PACK_OPTIONS.map((p) => (
+                  <option key={p.code} value={p.code}>{p.label}</option>
+                ))}
               </select>
               <select value={fileForm.status} onChange={(e) => setFileForm({ ...fileForm, status: e.target.value })}>
                 <option value="en_cours">En cours</option>
                 <option value="bloque">Bloqué</option>
                 <option value="finalise">Finalisé</option>
               </select>
-              <input placeholder="Prix €" value={fileForm.price} onChange={(e) => setFileForm({ ...fileForm, price: e.target.value })} />
+              <input placeholder="Prix €" value={fileForm.packPrice ?? fileForm.price ?? ''} onChange={(e) => setFileForm({ ...fileForm, packPrice: e.target.value })} />
               <input placeholder="Adresse" value={fileForm.address} onChange={(e) => setFileForm({ ...fileForm, address: e.target.value })} />
               <input placeholder="Puissance kWc" value={fileForm.power} onChange={(e) => setFileForm({ ...fileForm, power: e.target.value })} />
               <input placeholder="Date dépôt mairie" value={fileForm.mairieDepositDate || ''} onChange={(e) => setFileForm({ ...fileForm, mairieDepositDate: e.target.value })} />
@@ -1149,25 +1205,25 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
       {previewClient && (
         <div className="modal-backdrop" onClick={() => setPreviewClient(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div className="pill soft">Client</div>
-                <h3 style={{ margin: "6px 0 0" }}>{previewClient.name || "Sans nom"}</h3>
-                <div className="small">{previewClient.company || "—"}</div>
-                <div className="small">{previewClient.email || "—"} · {previewClient.phone || "—"}</div>
+              <div className="modal-header">
+                <div>
+                  <div className="pill soft">Client</div>
+                  <h3 style={{ margin: "6px 0 0" }}>{previewClient.name || "Sans nom"}</h3>
+                  <div className="small">{previewClient.company || "—"}</div>
+                  <div className="small">{previewClient.email || "—"} · {previewClient.phone || "—"}</div>
+                </div>
+                <button className="btn-icon" onClick={() => setPreviewClient(null)}>✕</button>
               </div>
-              <button className="btn-icon" onClick={() => setPreviewClient(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="info-cards">
-                <div className="info-chip">
-                  <div className="mini-label">Pack</div>
-                  <div className="mini-value">{previewClient.pack || "validation"}</div>
-                </div>
-                <div className="info-chip">
-                  <div className="mini-label">Segment</div>
-                  <div className="mini-value">{previewClient.segment || "small"}</div>
-                </div>
+              <div className="modal-body">
+                <div className="info-cards">
+                  <div className="info-chip">
+                    <div className="mini-label">Pack</div>
+                  <div className="mini-value">{packLabel(previewClient)}</div>
+                  </div>
+                  <div className="info-chip">
+                    <div className="mini-label">Segment</div>
+                    <div className="mini-value">{previewClient.segment || "small"}</div>
+                  </div>
                 <div className="info-chip">
                   <div className="mini-label">Statut</div>
                   <div className="mini-value">{previewClient.status || "actif"}</div>
@@ -1184,17 +1240,17 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
       {previewFile && (
         <div className="modal-backdrop" onClick={() => setPreviewFile(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div className="pill soft">Dossier</div>
-                <h3 style={{ margin: "6px 0 0" }}>{previewFile.title || "Sans titre"}</h3>
-                <div className="small">
-                  Client : {clientsById[previewFile.clientId]?.company || clientsById[previewFile.clientId]?.name || previewFile.clientId || "—"} • Pack : {previewFile.pack || "validation"}
+              <div className="modal-header">
+                <div>
+                  <div className="pill soft">Dossier</div>
+                  <h3 style={{ margin: "6px 0 0" }}>{previewFile.title || "Sans titre"}</h3>
+                  <div className="small">
+                  Client : {clientsById[previewFile.clientId]?.company || clientsById[previewFile.clientId]?.name || previewFile.clientId || "—"} • Pack : {packLabel(previewFile)}
+                  </div>
                 </div>
+                <button className="btn-icon" onClick={() => setPreviewFile(null)}>✕</button>
               </div>
-              <button className="btn-icon" onClick={() => setPreviewFile(null)}>✕</button>
-            </div>
-            <div className="modal-body">
+              <div className="modal-body">
               <div className="info-cards">
                 <div className="info-chip">
                   <div className="mini-label">Statut</div>
@@ -1202,7 +1258,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 </div>
                 <div className="info-chip">
                   <div className="mini-label">Prix</div>
-                  <div className="mini-value">{previewFile.price || "—"}</div>
+                  <div className="mini-value">{packPrice(previewFile)}</div>
                 </div>
                 <div className="info-chip">
                   <div className="mini-label">Puissance</div>
