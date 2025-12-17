@@ -533,6 +533,7 @@ function FileDetail({ file, attachments, setAttachments }) {
 function MainApp() {
   const { user, claims, loading: authLoading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [leadPage, setLeadPage] = useState(0);
   const [filePage, setFilePage] = useState(0);
   const [leadPageSize, setLeadPageSize] = useState(50);
@@ -558,6 +559,13 @@ function MainApp() {
       if (saved) setAttachments(JSON.parse(saved));
     } catch (_e) { /* ignore */ }
   }, []);
+  useEffect(() => {
+    const path = location.pathname || "";
+    if (path.startsWith("/admin/leads")) return setTab("leads");
+    if (path.startsWith("/admin/clients")) return setTab("clients");
+    if (path.startsWith("/admin/dossiers") || path.startsWith("/admin/files")) return setTab("files");
+    if (path.startsWith("/admin")) return setTab("dashboard");
+  }, [location.pathname]);
   const adminLeadsUrl = adminKey
     ? `${API_BASE}/admin/leads?limit=${leadPageSize}&offset=${leadPage * leadPageSize}${leadTab !== "all" ? `&status=${leadTab}` : ""}${
         leadFilters.email ? `&email=${encodeURIComponent(leadFilters.email)}` : ""
@@ -746,7 +754,21 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
           { key: 'clients', label: 'Clients', icon: <UsersIcon /> },
           { key: 'files', label: 'Dossiers', icon: <FolderIcon /> },
         ].map((t) => (
-          <div key={t.key} className={`nav-item ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+          <div
+            key={t.key}
+            className={`nav-item ${tab === t.key ? 'active' : ''}`}
+            onClick={() => {
+              setTab(t.key);
+              const target = t.key === "dashboard"
+                ? "/admin"
+                : t.key === "leads"
+                  ? "/admin/leads"
+                  : t.key === "clients"
+                    ? "/admin/clients"
+                    : "/admin/dossiers";
+              if (location.pathname !== target) navigate(target);
+            }}
+          >
             <span className="nav-ico">{t.icon}</span> {t.label}
           </div>
         ))}
@@ -1221,15 +1243,19 @@ export default function App() {
       <ClientEntryBanner />
       <Routes>
         <Route path="/admin/login" element={<LoginAdmin />} />
-        <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin" element={<MainApp />} />
+        <Route path="/admin/leads" element={<MainApp />} />
+        <Route path="/admin/clients" element={<MainApp />} />
+        <Route path="/admin/dossiers" element={<MainApp />} />
+        <Route path="/admin/dashboard" element={<Navigate to="/admin" replace />} />
         <Route path="/admin/dossiers/:id" element={<AdminRoute><AdminFileDetail /></AdminRoute>} />
         <Route path="/admin/planning" element={<AdminRoute><AdminPlanning /></AdminRoute>} />
         <Route path="/admin/operator" element={<AdminRoute><OperatorBoard /></AdminRoute>} />
         <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
         <Route path="/admin/dev/seed" element={<AdminRoute><DevSeed /></AdminRoute>} />
         <Route path="/admin/fix-installer" element={<AdminRoute><FixInstallerIds /></AdminRoute>} />
-        <Route path="/admin/debug/health" element={<AdminRoute><HealthDebug /></AdminRoute>} />
-        <Route path="/admin/debug/messages" element={<AdminRoute><MessagesDebug /></AdminRoute>} />
+        <Route path="/admin/debug/health" element={<DebugRoute><HealthDebug /></DebugRoute>} />
+        <Route path="/admin/debug/messages" element={<DebugRoute><MessagesDebug /></DebugRoute>} />
 
         <Route path="/client/login" element={<ClientLogin />} />
       <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
@@ -1243,8 +1269,8 @@ export default function App() {
       <Route path="/espace-admin" element={<Navigate to="/admin/login" replace />} />
       <Route path="/debug/auth" element={<AuthDebug />} />
 
-        <Route path="/" element={<Navigate to="/client/login" replace />} />
-        <Route path="/*" element={<Navigate to="/client/login" replace />} />
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="/*" element={<Navigate to="/admin" replace />} />
       </Routes>
     </>
   );
@@ -1256,5 +1282,18 @@ function AdminRoute({ children }) {
   if (!user || role !== "admin") {
     return <Navigate to="/admin/login" replace />;
   }
+  return children;
+}
+
+function DebugRoute({ children }) {
+  const location = useLocation();
+  const isDebug = useMemo(() => {
+    try {
+      return new URLSearchParams(location.search || "").get("debug") === "1";
+    } catch (_e) {
+      return false;
+    }
+  }, [location.search]);
+  if (!isDebug) return <Navigate to="/admin" replace />;
   return children;
 }
