@@ -183,11 +183,15 @@ function LeadDetail({ lead, clientsById }) {
     : null;
 
   const convert = async () => {
+    if (lead?.clientId) return;
     setConverting(true);
     try {
       const res = await fetch(`${API_BASE}/leads/${lead.id}/convert`, { method: "POST", headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN }, body: JSON.stringify({}) });
       const body = await res.json();
-      if (!res.ok) throw new Error(body?.error || res.statusText);
+      if (!res.ok) {
+        if (res.status === 409 || body?.error === "lead_already_converted") throw new Error("Ce lead a déjà été converti");
+        throw new Error(body?.error || res.statusText);
+      }
       // rafraîchir sans recharger la page
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('saf-reload'));
@@ -207,11 +211,18 @@ function LeadDetail({ lead, clientsById }) {
       <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
       <div className="badge" style={{ marginTop: 8 }}>{lead.status || 'nouveau'}</div>
       {linkedClientLabel && <div className="pill" style={{ marginTop: 6 }}>Client lié : {linkedClientLabel}</div>}
-      <div style={{ marginTop: 8 }}>
-        <button disabled={converting} onClick={convert} className="btn-primary">
-          {converting ? "Conversion..." : "Convertir en client"}
-        </button>
-      </div>
+      {lead.clientId ? (
+        <div style={{ marginTop: 8 }}>
+          <div className="pill soft">Ce lead a déjà été converti{lead.convertedAt ? ` le ${formatDate(lead.convertedAt)}` : ''}</div>
+          {linkedClientLabel && <div className="small">Voir le client : {linkedClientLabel}</div>}
+        </div>
+      ) : (
+        <div style={{ marginTop: 8 }}>
+          <button disabled={converting} onClick={convert} className="btn-primary">
+            {converting ? "Conversion..." : "Convertir en client"}
+          </button>
+        </div>
+      )}
       <h4 style={{ marginTop: 16 }}>Historique</h4>
       {loading && <div>Chargement…</div>}
       <div className="event-list">
@@ -1046,6 +1057,12 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               </div>
             </div>
           </div>
+          {selected?.clientId && (
+            <div className="card" style={{ marginBottom: 8, background: "#fff7ed" }}>
+              <div className="small">Ce lead a déjà été converti{selected.convertedAt ? ` le ${formatDate(selected.convertedAt)}` : ""}.</div>
+              <div className="small">Client ID : {selected.clientId}</div>
+            </div>
+          )}
           <LeadDetail lead={selected} clientsById={clientsById} />
         </div>
       )}
