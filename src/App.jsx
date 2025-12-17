@@ -687,7 +687,7 @@ export default function App() {
           ...form,
           packCode: selectedPack.code,
           packLabel: selectedPack.label,
-          packPrice: selectedPack.price,
+          packPrice: selectedPack.code === "FLEX" ? undefined : selectedPack.price,
         }),
       });
       const body = await res.json();
@@ -912,14 +912,50 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               value={form.packCode}
               onChange={(e) => {
                 const sel = PACK_OPTIONS.find((p) => p.code === e.target.value) || PACK_OPTIONS[0];
-                setForm({ ...form, packCode: sel.code, packLabel: sel.label, packPrice: sel.price });
+                setForm({
+                  ...form,
+                  packCode: sel.code,
+                  packLabel: sel.label,
+                  packPrice: sel.code === "FLEX" ? "" : sel.price,
+                  flexItems: sel.code === "FLEX" ? [] : form.flexItems,
+                });
               }}
             >
               {PACK_OPTIONS.map((p) => (
                 <option key={p.code} value={p.code}>{p.label}</option>
               ))}
             </select>
-            <input placeholder="Prix €" value={form.packPrice ?? ''} onChange={(e) => setForm({ ...form, packPrice: e.target.value })} />
+            {form.packCode === "FLEX" ? (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[
+                  { code: "DP_MAIRIE", label: "DP Mairie", price: 89 },
+                  { code: "CONSUEL_BLEU", label: "Consuel Bleu", price: 45 },
+                  { code: "CONSUEL_VIOLET", label: "Consuel Violet", price: 65 },
+                  { code: "RACCORDEMENT_ENEDIS", label: "Raccordement Enedis", price: 99 },
+                  { code: "RACCORD_ENEDIS", label: "Raccordement Enedis", price: 99 }, // fallback naming
+                ].map((opt) => {
+                  const checked = (form.flexItems || []).some((i) => i.code === opt.code);
+                  return (
+                    <label key={opt.code} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = checked
+                            ? (form.flexItems || []).filter((i) => i.code !== opt.code)
+                            : [...(form.flexItems || []), { code: opt.code, label: opt.label, price: opt.price }];
+                          setForm({ ...form, flexItems: next });
+                        }}
+                      />
+                      {opt.label} ({opt.price}€)
+                    </label>
+                  );
+                })}
+                <div style={{ fontWeight: 600 }}>Total Flex : { (form.flexItems || []).reduce((s, i) => s + (Number(i.price) || 0), 0) } €</div>
+              </div>
+            ) : (
+              <input placeholder="Prix €" value={form.packPrice ?? ''} onChange={(e) => setForm({ ...form, packPrice: e.target.value })} />
+            )}
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               <option value="nouveau">Nouveau</option>
               <option value="en_cours">En cours</option>
