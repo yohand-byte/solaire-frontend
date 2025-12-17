@@ -9,9 +9,9 @@
 
 ## 🧪 Procédure de test local
 1. `npm install` (si nécessaire) puis `npm run dev`.
-2. Aller sur `http://localhost:5173/dev/seed`, se logguer en admin (`yohan.d@qualiwatt.com / Hashem0409@`).
+2. Aller sur `http://localhost:5173/dev/seed`, se connecter avec les identifiants admin conservés en secret (voir variables d’environnement, aucun mot de passe n’est versionné).
 3. Cliquer sur *Vider les collections* puis *Seed de démo* pour régénérer les données.
-4. Ouvrir `http://localhost:5173/client/login`, se connecter en installateur (`installateur1@test.com / 123456789`).
+4. Ouvrir `http://localhost:5173/client/login`, se connecter en installateur avec les identifiants fournis en dehors du dépôt (ou créés via le seed).
 5. Vérifier `/client/dashboard` (totaux + tableau cliquable) et `/client/dossiers/:id`.
 6. Regarder `/dev/seed` : le bouton seed fonctionne à nouveau si besoin.
 

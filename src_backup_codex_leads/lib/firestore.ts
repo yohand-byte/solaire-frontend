@@ -6,13 +6,21 @@ import {
 } from "firebase/firestore";
 import { PACKS } from "../constants";
 
+const env = import.meta.env;
+
+function requireEnv(key: string) {
+  const value = env?.[key];
+  if (value) return value;
+  throw new Error(`[firebase] missing required env ${key}`);
+}
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBc1cYCEqFVXvB2YdxHTxhVlPqtTbfVVLM",
-  authDomain: "solaire-frontend.firebaseapp.com",
-  projectId: "solaire-frontend",
-  storageBucket: "solaire-frontend.firebasestorage.app",
-  messagingSenderId: "29459740400",
-  appId: "1:29459740400:web:2fa88c891fece254c8f435",
+  apiKey: requireEnv("VITE_FIREBASE_API_KEY"),
+  authDomain: requireEnv("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: requireEnv("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: requireEnv("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: requireEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
+  appId: requireEnv("VITE_FIREBASE_APP_ID"),
 };
 
 export const app = initializeApp(firebaseConfig);
