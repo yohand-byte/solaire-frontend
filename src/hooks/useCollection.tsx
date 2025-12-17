@@ -14,14 +14,9 @@ export function useCollection(path: string, whereClause?: [string, string, any],
       setLoading(true);
       return;
     }
-    if (!user) {
-      setData([]);
-      setLoading(false);
-      return;
-    }
     const colRef = collection(db, path);
     let q: any = colRef;
-    if (role === "installer") {
+    if (user && role === "installer") {
       const installerId = installerFilter || claims?.installerId;
       if (!installerId) {
         setError(new Error("installerId missing in claims"));
