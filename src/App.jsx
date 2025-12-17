@@ -1153,13 +1153,6 @@ export default function App() {
 }
 
 function AdminRoute({ children }) {
-  const { user, loading } = useAuth();
-
-  if (loading || !user) {
-    if (!loading && !user) return <Navigate to="/login" replace />;
-    return <div className="page-loader">Chargement de la session…</div>;
-  }
-
-  // En mode dev très permissif : dès qu'un user existe, on laisse passer
+  // Admin non protégé (comportement d'origine : toujours afficher le CRM)
   return children;
 }
