@@ -1156,6 +1156,7 @@ function AdminRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading || !user) {
+    if (!loading && !user) return <Navigate to="/login" replace />;
     return <div className="page-loader">Chargement de la session…</div>;
   }
 
