@@ -55,7 +55,9 @@ export default function LeadDetail() {
         <div>
           <button className="btn-link" onClick={() => navigate(-1)}>&larr; Retour</button>
           <h1 className="admin-page-title">Lead : {lead.name || lead.nom || "Sans nom"}</h1>
-          <p className="admin-page-subtitle">{lead.email || "—"} • {lead.phone || lead.téléphone || "—"}</p>
+          <p className="admin-page-subtitle">
+            {lead.company || lead.companyName || "—"} • {lead.email || "—"} • {lead.phone || lead.téléphone || "—"}
+          </p>
         </div>
         <div className="pill">{lead.status || "nouveau"}</div>
       </div>
@@ -66,6 +68,8 @@ export default function LeadDetail() {
         <div className="card">
           <h3>Informations</h3>
           <ul className="data-list">
+            <li><span>Entreprise</span><strong>{lead.company || lead.companyName || "—"}</strong></li>
+            <li><span>Contact</span><strong>{lead.name || lead.nom || "—"}</strong></li>
             <li><span>Source</span><strong>{lead.source || "—"}</strong></li>
             <li><span>Adresse</span><strong>{lead.address || lead.adresse || "—"}</strong></li>
             <li><span>Créé le</span><strong>{formatDate(lead.createdAt)}</strong></li>

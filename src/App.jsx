@@ -132,6 +132,7 @@ function LeadsTable({ leads, onSelect }) {
         <thead>
           <tr>
             <th>Nom</th>
+            <th>Entreprise</th>
             <th>Email</th>
             <th>Téléphone</th>
             <th>Statut</th>
@@ -147,6 +148,7 @@ function LeadsTable({ leads, onSelect }) {
               style={{ cursor: 'pointer' }}
             >
               <td>{l.name || '—'}</td>
+              <td>{l.company || l.companyName || '—'}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
               <td><span className={`badge-status ${l.status || 'nouveau'}`}>{l.status || 'nouveau'}</span></td>
@@ -539,7 +541,7 @@ function MainApp() {
   const [clientFilters, setClientFilters] = useState({ search: "", pack: "", segment: "" });
   const [previewClient, setPreviewClient] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "landing" });
+  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", source: "landing" });
   const defaultPack = PACKS[0]?.value || "essentiel";
   const defaultPrice = PACK_PRICE[defaultPack] != null ? String(PACK_PRICE[defaultPack]) : "";
   const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: defaultPack, segment: "small", status: "actif" });
@@ -619,7 +621,7 @@ function MainApp() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setForm({ name: "", email: "", phone: "", source: "landing" });
+      setForm({ name: "", company: "", email: "", phone: "", source: "landing" });
       setReloadKey((k) => k + 1);
     } catch (err) {
       alert(`Erreur création: ${err.message}`);
@@ -697,6 +699,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
       const matchEmail = leadFilters.email ? (l.email || "").toLowerCase().includes(leadFilters.email.toLowerCase()) : true;
       const matchSearch = leadFilters.search
         ? (l.name || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+          (l.company || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
           (l.phone || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
           (l.email || "").toLowerCase().includes(leadFilters.search.toLowerCase())
         : true;
@@ -842,7 +845,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
             </div>
             <div className="field">
               <label>Recherche</label>
-              <input value={leadFilters.search} onChange={(e) => setLeadFilters({ ...leadFilters, search: e.target.value })} placeholder="Nom, email ou téléphone" />
+              <input value={leadFilters.search} onChange={(e) => setLeadFilters({ ...leadFilters, search: e.target.value })} placeholder="Nom, entreprise, email ou téléphone" />
             </div>
           </div>
         </div>
@@ -1213,6 +1216,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
 
       </main>
     </div>
+    </>
   );
 }
 
