@@ -755,6 +755,13 @@ export default function App() {
   }
   const leads = Array.isArray(leadsResp?.items) ? leadsResp.items : [];
   const leadsTotal = typeof leadsResp?.total === 'number' ? leadsResp.total : 0;
+  const leadsSortedByDate = useMemo(() => {
+    return [...leads].sort((a, b) => {
+      const da = tsToDate(a.createdAt)?.getTime() || 0;
+      const db = tsToDate(b.createdAt)?.getTime() || 0;
+      return db - da;
+    });
+  }, [leads]);
   const files = Array.isArray(filesResp?.items) ? filesResp.items : [];
   const filesTotal = typeof filesResp?.total === 'number' ? filesResp.total : 0;
 const landingSnippet = `POST ${API_BASE}/leads
@@ -812,6 +819,37 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
     });
   }, [clients, clientFilters]);
 
+  const pipelineCounts = useMemo(() => {
+    const counts = { nouveau: 0, contacte: 0, qualifie: 0, converti: 0 };
+    const stage = (status) => {
+      const s = (status || "").toLowerCase();
+      if (s.includes("gagne") || s.includes("convert")) return "converti";
+      if (s.includes("qualif")) return "qualifie";
+      if (s.includes("en_cours") || s.includes("contact")) return "contacte";
+      return "nouveau";
+    };
+    (leads || []).forEach((l) => {
+      const st = stage(l.status);
+      counts[st] = (counts[st] || 0) + 1;
+    });
+    return counts;
+  }, [leads]);
+
+  const todoToday = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    return (leads || []).filter((l) => {
+      const created = tsToDate(l.createdAt);
+      if (!created) return false;
+      const age = now - created.getTime();
+      return age > dayMs && (l.status || "").toLowerCase() === "nouveau";
+    }).sort((a, b) => (tsToDate(b.createdAt)?.getTime() || 0) - (tsToDate(a.createdAt)?.getTime() || 0));
+  }, [leads]);
+
+  const latestLeads = useMemo(() => {
+    return (leadsSortedByDate || []).slice(0, 5);
+  }, [leadsSortedByDate]);
+
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -864,24 +902,104 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
         </div>
 
       {tab === 'dashboard' && stats && (
-        <div className="cards">
-          <div className="metric">
-            <h4>Leads</h4>
-            <div className="big">{stats.leads?.total || 0}</div>
-            <div className="sub">Nouveau: {stats.leads?.byStatus?.nouveau || 0} · En cours: {stats.leads?.byStatus?.en_cours || 0} · Gagné: {stats.leads?.byStatus?.gagne || 0}</div>
+        <>
+          <div className="cards">
+            <div className="metric">
+              <h4>Leads</h4>
+              <div className="big">{stats.leads?.total || 0}</div>
+              <div className="sub">Nouveau: {stats.leads?.byStatus?.nouveau || 0} · En cours: {stats.leads?.byStatus?.en_cours || 0} · Gagné: {stats.leads?.byStatus?.gagne || 0}</div>
+            </div>
+            <div className="metric">
+              <h4>Dossiers</h4>
+              <div className="big">{stats.files?.total || 0}</div>
+              <div className="sub">En cours: {stats.files?.byStatus?.en_cours || 0} · Bloqué: {stats.files?.byStatus?.bloque || 0} · Finalisé: {stats.files?.byStatus?.finalise || 0}</div>
+              <div className="sub">Prix total: {stats.files?.priceSum ?? 0} €</div>
+            </div>
+            <div className="metric">
+              <h4>Clients</h4>
+              <div className="big">{stats.clients?.total || 0}</div>
+              <div className="sub">Actifs/VIP à affiner</div>
+            </div>
           </div>
-          <div className="metric">
-            <h4>Dossiers</h4>
-            <div className="big">{stats.files?.total || 0}</div>
-            <div className="sub">En cours: {stats.files?.byStatus?.en_cours || 0} · Bloqué: {stats.files?.byStatus?.bloque || 0} · Finalisé: {stats.files?.byStatus?.finalise || 0}</div>
-            <div className="sub">Prix total: {stats.files?.priceSum ?? 0} €</div>
+
+          <div className="card" style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <h3 style={{ margin: 0 }}>À faire aujourd'hui</h3>
+              <span style={{ background: "#e53935", color: "#fff", borderRadius: 999, padding: "4px 10px", fontWeight: 600, fontSize: 12 }}>
+                {todoToday.length}
+              </span>
+            </div>
+            <div className="table-wrapper" style={{ marginTop: 8 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Entreprise</th>
+                    <th>Pack</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todoToday.slice(0, 10).map((l) => (
+                    <tr key={l.id}>
+                      <td>{l.company || "—"}</td>
+                      <td>{packLabel(l)}</td>
+                      <td>{formatDate(l.createdAt)}</td>
+                    </tr>
+                  ))}
+                  {!todoToday.length && (
+                    <tr><td colSpan={3}>Rien à traiter.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div className="metric">
-            <h4>Clients</h4>
-            <div className="big">{stats.clients?.total || 0}</div>
-            <div className="sub">Actifs/VIP à affiner</div>
+
+          <div className="card" style={{ marginTop: 12 }}>
+            <h3 style={{ marginTop: 0 }}>Pipeline</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              {[
+                { key: "nouveau", label: "Nouveau" },
+                { key: "contacte", label: "Contacté" },
+                { key: "qualifie", label: "Qualifié" },
+                { key: "converti", label: "Converti" },
+              ].map((c) => (
+                <div key={c.key} className="card" style={{ boxShadow: "none", border: "1px solid #e5e7eb" }}>
+                  <div className="mini-label" style={{ textTransform: "uppercase", fontSize: 11 }}>{c.label}</div>
+                  <div className="big" style={{ marginTop: 4 }}>{pipelineCounts[c.key] || 0}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+
+          <div className="card" style={{ marginTop: 12 }}>
+            <h3 style={{ marginTop: 0 }}>Derniers leads</h3>
+            <div className="table-wrapper" style={{ marginTop: 8 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Entreprise</th>
+                    <th>Contact</th>
+                    <th>Pack</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {latestLeads.map((l) => (
+                    <tr key={l.id} className="clickable" onClick={() => { setTab('leads'); setSelected(l); }}>
+                      <td>{l.company || "—"}</td>
+                      <td>{l.name || "—"}</td>
+                      <td>{packLabel(l)}</td>
+                      <td>{formatDate(l.createdAt)}</td>
+                    </tr>
+                  ))}
+                  {!latestLeads.length && (
+                    <tr><td colSpan={4}>Aucun lead.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
 
