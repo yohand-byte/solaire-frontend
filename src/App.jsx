@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 const API_BASE = 'https://solaire-api-828508661560.europe-west1.run.app';
 const API_TOKEN = 'saftoken-123';
+const formatDate = (ts) => {
+  if (!ts) return "—";
+  const d = ts?._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("fr-FR");
+};
 
 const HomeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -110,6 +116,9 @@ function LeadsTable({ leads, onSelect }) {
             <th>Entreprise</th>
             <th>Email</th>
             <th>Téléphone</th>
+            <th>Pack</th>
+            <th>Prix €</th>
+            <th>Date</th>
             <th>Statut</th>
             <th>Source</th>
           </tr>
@@ -121,6 +130,9 @@ function LeadsTable({ leads, onSelect }) {
               <td>{l.company || l.companyName || '—'}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
+              <td>{l.pack || '—'}</td>
+              <td>{l.price ?? '—'}</td>
+              <td>{formatDate(l.createdAt)}</td>
               <td><span className={`badge-status ${l.status || 'nouveau'}`}>{l.status || 'nouveau'}</span></td>
               <td>{l.source || 'webhook'}</td>
             </tr>
@@ -160,6 +172,8 @@ function LeadDetail({ lead, clientsById }) {
       <h3>{lead.name || 'Sans nom'}</h3>
       <div className="small">{lead.company || lead.companyName || '—'}</div>
       <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
+      <div className="small">Pack : {lead.pack || '—'} · Prix : {lead.price ?? '—'} €</div>
+      <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
       <div className="badge" style={{ marginTop: 8 }}>{lead.status || 'nouveau'}</div>
       {linkedClientLabel && <div className="pill" style={{ marginTop: 6 }}>Client lié : {linkedClientLabel}</div>}
       <div style={{ marginTop: 8 }}>
@@ -572,7 +586,7 @@ export default function App() {
   const [clientFilters, setClientFilters] = useState({ search: "", pack: "", segment: "" });
   const [previewClient, setPreviewClient] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
-  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", volume: "", pack: "", status: "nouveau", source: "landing" });
+  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", volume: "", pack: "validation", price: "", status: "nouveau", source: "landing" });
   const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
   const [fileForm, setFileForm] = useState({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "" });
   const [landingHooked, setLandingHooked] = useState(false);
@@ -644,7 +658,7 @@ export default function App() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setForm({ name: "", company: "", email: "", phone: "", volume: "", pack: "", status: "nouveau", source: "landing" });
+      setForm({ name: "", company: "", email: "", phone: "", volume: "", pack: "validation", price: "", status: "nouveau", source: "landing" });
       setReloadKey((k) => k + 1);
     } catch (err) {
       alert(`Erreur création: ${err.message}`);
@@ -798,6 +812,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
             <h4>Dossiers</h4>
             <div className="big">{stats.files?.total || 0}</div>
             <div className="sub">En cours: {stats.files?.byStatus?.en_cours || 0} · Bloqué: {stats.files?.byStatus?.bloque || 0} · Finalisé: {stats.files?.byStatus?.finalise || 0}</div>
+            <div className="sub">Prix total: {stats.files?.priceSum ?? 0} €</div>
           </div>
           <div className="metric">
             <h4>Clients</h4>
@@ -851,7 +866,12 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
             <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             <input placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             <input placeholder="Volume (installations/mois)" value={form.volume} onChange={(e) => setForm({ ...form, volume: e.target.value })} />
-            <input placeholder="Pack" value={form.pack} onChange={(e) => setForm({ ...form, pack: e.target.value })} />
+            <select value={form.pack || "validation"} onChange={(e) => setForm({ ...form, pack: e.target.value })}>
+              <option value="validation">Validation</option>
+              <option value="mise_en_service">Mise en service</option>
+              <option value="zero_stress">Zéro Stress</option>
+            </select>
+            <input placeholder="Prix €" value={form.price || ''} onChange={(e) => setForm({ ...form, price: e.target.value })} />
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               <option value="nouveau">Nouveau</option>
               <option value="en_cours">En cours</option>
@@ -903,6 +923,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                     <th>Email</th>
                     <th>Téléphone</th>
                   <th>Pack</th>
+                  <th>Prix €</th>
+                  <th>Date</th>
                   <th>Segment</th>
                   <th>Statut</th>
                   <th style={{ width: 190 }}>Actions</th>
@@ -921,6 +943,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                       <td>{c.email || "—"}</td>
                       <td>{c.phone || "—"}</td>
                       <td>{c.pack || "validation"}</td>
+                      <td>{c.price ?? "—"}</td>
+                      <td>{formatDate(c.createdAt)}</td>
                       <td>{c.segment || "small"}</td>
                       <td><span className={`status-badge ${c.status || 'actif'}`}>{c.status || 'actif'}</span></td>
                       <td>
@@ -993,31 +1017,33 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               <button className="btn-secondary" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>Aller au formulaire dossier</button>
               <button className="btn-secondary" onClick={exportFilesCSV}>Exporter CSV</button>
             </div>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Titre</th>
-                  <th>Client</th>
-                  <th>Statut</th>
-                  <th>Pack</th>
-                  <th>Prix</th>
-                  <th style={{ width: 160 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredFiles.map((f) => (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Titre</th>
+                    <th>Client</th>
+                    <th>Statut</th>
+                    <th>Pack</th>
+                    <th>Prix</th>
+                    <th>Date</th>
+                    <th style={{ width: 160 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredFiles.map((f) => (
                   <tr
                     key={f.id}
                     className={`clickable ${selectedFile?.id === f.id ? 'selected' : ''}`}
                     onClick={() => setSelectedFile(f)}
                     style={{ cursor: "pointer" }}
-                  >
-                    <td>{f.title || "—"}</td>
-                    <td>{clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || "—"}</td>
-                    <td><span className={`badge-status ${f.status || 'en_cours'}`}>{f.status || "en_cours"}</span></td>
+                    >
+                      <td>{f.title || "—"}</td>
+                      <td>{clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || "—"}</td>
+                      <td><span className={`badge-status ${f.status || 'en_cours'}`}>{f.status || "en_cours"}</span></td>
                   <td>{f.pack || "validation"}</td>
                   <td>{f.price || "—"}</td>
-                  <td>
+                  <td>{formatDate(f.createdAt)}</td>
+                      <td>
                     <div className="actions" onClick={(e) => e.stopPropagation()}>
                         <button className="btn-icon view" title="Voir le dossier" aria-label="Voir" onClick={() => { setSelectedFile(f); setPreviewFile(f); }}><EyeIcon /> Voir</button>
                         <button
