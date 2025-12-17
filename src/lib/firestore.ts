@@ -9,12 +9,12 @@ import { PACKS } from "../constants";
 const env = import.meta.env;
 
 const fallbackConfig = {
-  apiKey: "AIzaSyBdQP61dhT8it9_Ua-U8u-xgh40DLnfNbg",
-  authDomain: "solaire-admin.firebaseapp.com",
-  projectId: "solaire-admin",
-  storageBucket: "solaire-admin.firebasestorage.app",
-  messagingSenderId: "294963767896",
-  appId: "1:294963767896:web:a2f6590fba1de9a0d2782d",
+  apiKey: "AIzaSyBc1cYCEqFVXvB2YdxHTxhVlPqtTbfVVLM",
+  authDomain: "solaire-frontend.firebaseapp.com",
+  projectId: "solaire-frontend",
+  storageBucket: "solaire-frontend.firebasestorage.app",
+  messagingSenderId: "29459740400",
+  appId: "1:29459740400:web:2fa88c891fece254c8f435",
 };
 
 function requireEnv(key: string, fallback?: string) {
