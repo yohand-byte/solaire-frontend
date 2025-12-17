@@ -237,7 +237,8 @@ function ClientDetail({ client, onCreatedFile }) {
   const createFileForClient = async () => {
     setCreatingFile(true);
     try {
-      const sel = PACK_OPTIONS.find((p) => p.code === (client.packCode || client.pack)) || PACK_OPTIONS[0];
+      const code = (client.packCode || (typeof client.pack === "object" ? client.pack.code : client.pack) || PACK_OPTIONS[0].code).toString().toUpperCase();
+      const sel = PACK_OPTIONS.find((p) => p.code === code) || PACK_OPTIONS[0];
       const res = await fetch(`${API_BASE}/files`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
@@ -253,7 +254,11 @@ function ClientDetail({ client, onCreatedFile }) {
         }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body?.error || res.statusText);
+      if (!res.ok) {
+        const msg = body?.message || body?.error || res.statusText;
+        if (body?.error === "file_exists") throw new Error("Un dossier existe déjà pour ce client.");
+        throw new Error(msg);
+      }
       if (onCreatedFile) onCreatedFile();
       alert("Dossier créé");
     } catch (err) {
@@ -302,11 +307,14 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
 
   useEffect(() => {
     if (!file) { setForm({}); return; }
+    const rawCode = (file.packCode || (typeof file.pack === "object" ? file.pack.code : file.pack) || PACK_OPTIONS[0].code).toString().toUpperCase();
+    const opt = PACK_OPTIONS.find((p) => p.code === rawCode) || PACK_OPTIONS[0];
     setForm({
       ...file,
-      packCode: file.packCode || file.pack || "",
-      packLabel: file.packLabel || file.pack || "",
-      packPrice: file.packPrice ?? file.price ?? "",
+      packCode: opt.code,
+      packLabel: file.packLabel || (typeof file.pack === "object" ? file.pack.label : file.pack) || opt.label,
+      packPrice: file.packPrice ?? file.price ?? opt.price,
+      price: file.packPrice ?? file.price ?? opt.price,
     });
   }, [file]);
 
@@ -664,6 +672,11 @@ export default function App() {
   };
   const createFileForClient = async (client) => {
     if (!client?.id || creatingFileForClient) return;
+    const already = (files || []).some((f) => f.clientId === client.id && !["finalise", "clos"].includes((f.status || "").toLowerCase()));
+    if (already) {
+      alert("Un dossier existe déjà pour ce client.");
+      return;
+    }
     // Pré-remplit le formulaire dossier et ouvre l'onglet Dossiers au lieu de créer directement
     setCreatingFileForClient(true);
     setTab('files');
@@ -671,10 +684,10 @@ export default function App() {
     setFileForm({
       title: `Dossier ${client.name || client.id}`,
       clientId: client.id,
-          packCode: client.packCode || PACK_OPTIONS[0].code,
-          packLabel: client.packLabel || client.pack || PACK_OPTIONS[0].label,
-          packPrice: client.packPrice ?? client.price ?? PACK_OPTIONS[0].price,
-          price: client.packPrice ?? client.price ?? "",
+      packCode: (client.packCode || (typeof client.pack === "object" ? client.pack.code : client.pack) || PACK_OPTIONS[0].code).toString().toUpperCase(),
+      packLabel: client.packLabel || (typeof client.pack === "object" ? client.pack.label : client.pack) || PACK_OPTIONS[0].label,
+      packPrice: client.packPrice ?? client.price ?? PACK_OPTIONS[0].price,
+      price: client.packPrice ?? client.price ?? "",
       status: "en_cours",
       address: "",
       power: "",
@@ -1331,6 +1344,13 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
             <h3>Créer un dossier</h3>
             <form onSubmit={async (e) => {
               e.preventDefault();
+              if (fileForm.clientId) {
+                const exists = (files || []).some((f) => f.clientId === fileForm.clientId && f.id !== editingFileId && !["finalise", "clos"].includes((f.status || "").toLowerCase()));
+                if (exists) {
+                  alert("Un dossier existe déjà pour ce client.");
+                  return;
+                }
+              }
               setCreating(true);
               try {
             const res = await fetch(`${API_BASE}/files`, {
@@ -1339,8 +1359,11 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               body: JSON.stringify({ ...fileForm, id: editingFileId || undefined, pack: fileForm.packCode }),
             });
             const body = await res.json();
-            if (!res.ok) throw new Error(body?.error || res.statusText);
-            setFileForm({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "" });
+            if (!res.ok) {
+              if (body?.error === "file_exists") throw new Error("Un dossier existe déjà pour ce client.");
+              throw new Error(body?.error || res.statusText);
+            }
+            setFileForm({ title: "", clientId: "", packCode: PACK_OPTIONS[0].code, packLabel: PACK_OPTIONS[0].label, packPrice: PACK_OPTIONS[0].price, status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "" });
             setEditingFileId(null);
             setReloadKey((k) => k + 1);
           } catch (err) {
