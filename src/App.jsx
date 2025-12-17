@@ -22,6 +22,10 @@ import { AuthDebug } from "./debug/AuthDebug";
 
 const API_BASE = API_URL;
 const API_TOKEN = 'saftoken-123';
+const PACK_PRICE = PACKS.reduce((acc, p) => {
+  acc[p.value] = p.price ?? null;
+  return acc;
+}, {});
 
 const HomeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -536,8 +540,24 @@ function MainApp() {
   const [previewClient, setPreviewClient] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "landing" });
-  const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
-  const [fileForm, setFileForm] = useState({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" });
+  const defaultPack = PACKS[0]?.value || "essentiel";
+  const defaultPrice = PACK_PRICE[defaultPack] != null ? String(PACK_PRICE[defaultPack]) : "";
+  const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: defaultPack, segment: "small", status: "actif" });
+  const [fileForm, setFileForm] = useState({
+    title: "",
+    clientId: "",
+    pack: defaultPack,
+    price: defaultPrice,
+    status: "en_cours",
+    address: "",
+    power: "",
+    mairieDepositDate: "",
+    consuelVisitDate: "",
+    enedisPdL: "",
+    edfContractNumber: "",
+    nextAction: "",
+    nextActionDate: "",
+  });
   const [landingHooked, setLandingHooked] = useState(false);
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingFileId, setEditingFileId] = useState(null);
@@ -575,7 +595,7 @@ function MainApp() {
     setCreatingFileForClient(true);
     try {
       const res = await createFileSafeClient({
-        pack: client?.pack || "validation",
+        pack: client?.pack || defaultPack,
         statutGlobal: "en_cours",
         title: `Dossier ${client?.name || "Dossier"}`,
       });
@@ -619,7 +639,7 @@ function MainApp() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setClientForm({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
+      setClientForm({ name: "", email: "", phone: "", company: "", pack: defaultPack, segment: "small", status: "actif" });
       setEditingClientId(null);
       setReloadKey((k) => k + 1);
     } catch (err) {
@@ -647,6 +667,31 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
     }),
     [leadsFirebase]
   );
+  const [leadToast, setLeadToast] = useState(null);
+  const lastLeadTsRef = React.useRef(null);
+  useEffect(() => {
+    if (!ordered?.length) return;
+    const latestTs = (() => {
+      const lead = ordered[0];
+      const ts = lead.createdAt?.seconds ? lead.createdAt.seconds * 1000 : lead.createdAt || Date.now();
+      return typeof ts === "number" ? ts : Date.now();
+    })();
+    if (lastLeadTsRef.current === null) {
+      lastLeadTsRef.current = latestTs;
+      return;
+    }
+    if (latestTs > lastLeadTsRef.current) {
+      const newest = ordered[0];
+      const label = newest.email || newest.name || newest.phone || newest.id;
+      setLeadToast(`Nouveau lead : ${label}`);
+      lastLeadTsRef.current = latestTs;
+    }
+  }, [ordered]);
+  useEffect(() => {
+    if (!leadToast) return undefined;
+    const t = setTimeout(() => setLeadToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [leadToast]);
   const filteredLeads = useMemo(() => {
     return (ordered || []).filter((l) => {
       const matchEmail = leadFilters.email ? (l.email || "").toLowerCase().includes(leadFilters.email.toLowerCase()) : true;
@@ -683,12 +728,40 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
   }, [firebaseClients, clientFilters]);
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <h2>Solaire Admin</h2>
-        {[
-          { key: 'dashboard', label: 'Tableau de bord', icon: <HomeIcon /> },
-          { key: 'leads', label: 'Leads', icon: <LeadsIcon /> },
+    <>
+      {leadToast && (
+        <div
+          style={{
+            position: "fixed",
+            top: 16,
+            right: 16,
+            background: "#0f172a",
+            color: "#fff",
+            padding: "12px 14px",
+            borderRadius: 12,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+            zIndex: 9999,
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          <span>🔔 {leadToast}</span>
+          <button
+            className="btn-secondary"
+            style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "none", cursor: "pointer" }}
+            onClick={() => setLeadToast(null)}
+          >
+            Fermer
+          </button>
+        </div>
+      )}
+      <div className="layout">
+        <aside className="sidebar">
+          <h2>Solaire Admin</h2>
+          {[
+            { key: 'dashboard', label: 'Tableau de bord', icon: <HomeIcon /> },
+            { key: 'leads', label: 'Leads', icon: <LeadsIcon /> },
           { key: 'clients', label: 'Clients', icon: <UsersIcon /> },
           { key: 'files', label: 'Dossiers', icon: <FolderIcon /> },
         ].map((t) => (
@@ -829,7 +902,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
                     <td>{c.name || "—"}</td>
                     <td>{c.email || "—"}</td>
                     <td>{c.phone || "—"}</td>
-                    <td>{c.pack || "validation"}</td>
+                    <td>{PACKS.find((p) => p.value === c.pack)?.label || c.pack || "validation"}</td>
                     <td>{c.segment || "small"}</td>
                     <td><span className="badge-status">{c.status || "actif"}</span></td>
                     <td>
@@ -903,7 +976,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
                     <td>{f.title || f.id}</td>
                     <td>{f.clientId || "—"}</td>
                     <td><span className={`badge-status ${f.status || "en_cours"}`}>{f.status || "en_cours"}</span></td>
-                    <td>{f.pack || "validation"}</td>
+                    <td>{PACKS.find((p) => p.value === f.pack)?.label || f.pack || "validation"}</td>
                     <td>{f.price || "—"}</td>
                     <td style={{ display: "flex", gap: 8 }}>
                       <button className="btn-secondary" onClick={(e) => { e.stopPropagation(); setSelectedFile(f); }}>Voir</button>
@@ -971,7 +1044,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
                 </div>
               </div>
               <button className="btn-primary" type="submit" disabled={creating}>{creating ? "Sauvegarde..." : "Sauvegarder"}</button>
-              {editingClientId && <button className="btn-secondary" type="button" onClick={() => { setEditingClientId(null); setClientForm({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" }); }}>Réinitialiser</button>}
+              {editingClientId && <button className="btn-secondary" type="button" onClick={() => { setEditingClientId(null); setClientForm({ name: "", email: "", phone: "", company: "", pack: defaultPack, segment: "small", status: "actif" }); }}>Réinitialiser</button>}
             </form>
           </div>
 
@@ -988,7 +1061,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
                 });
                 const body = await res.json();
                 if (!res.ok) throw new Error(body?.error || res.statusText);
-                setFileForm({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" });
+                setFileForm({ title: "", clientId: "", pack: defaultPack, price: defaultPrice, status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" });
                 setEditingFileId(null);
                 setReloadKey((k) => k + 1);
               } catch (err) {
@@ -1002,12 +1075,27 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
                 <div className="field"><label>Client ID</label><input value={fileForm.clientId} onChange={(e) => setFileForm({ ...fileForm, clientId: e.target.value })} /></div>
               </div>
               <div className="grid-3">
-                <div className="field">
-                  <label>Pack</label>
-                  <select value={fileForm.pack} onChange={(e) => setFileForm({ ...fileForm, pack: e.target.value })}>
-                    {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </div>
+          <div className="field">
+            <label>Pack</label>
+            <select
+              value={fileForm.pack}
+              onChange={(e) => {
+                const nextPack = e.target.value;
+                const nextPrice = PACK_PRICE[nextPack];
+                setFileForm((prev) => {
+                  const prevDefault = PACK_PRICE[prev.pack] != null ? String(PACK_PRICE[prev.pack]) : "";
+                  const shouldAutofill = !prev.price || prev.price === prevDefault;
+                  return {
+                    ...prev,
+                    pack: nextPack,
+                    price: shouldAutofill && nextPrice != null ? String(nextPrice) : prev.price,
+                  };
+                });
+              }}
+            >
+              {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
                 <div className="field">
                   <label>Statut</label>
                   <select value={fileForm.status} onChange={(e) => setFileForm({ ...fileForm, status: e.target.value })}>
@@ -1048,7 +1136,7 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
               </div>
               <div style={{ display: "flex", gap: 12 }}>
                 <button className="btn-primary" type="submit" disabled={creating}>{creating ? "Sauvegarde..." : "Sauvegarder"}</button>
-                {editingFileId && <button className="btn-secondary" type="button" onClick={() => { setEditingFileId(null); setFileForm({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" }); }}>Réinitialiser</button>}
+                {editingFileId && <button className="btn-secondary" type="button" onClick={() => { setEditingFileId(null); setFileForm({ title: "", clientId: "", pack: defaultPack, price: defaultPrice, status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" }); }}>Réinitialiser</button>}
               </div>
             </form>
           </div>

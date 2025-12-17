@@ -1,7 +1,12 @@
 export const PACKS = [
-  { value: "validation", label: "Validation" },
-  { value: "mise_en_service", label: "Mise en service" },
-  { value: "zero_stress", label: "Zéro Stress" },
+  { value: "essentiel", label: "Essentiel", price: 169 },
+  { value: "pro", label: "Pro", price: 269 },
+  { value: "serenite", label: "Sérénité", price: 449 },
+  { value: "carte", label: "À la carte", price: 45 },
+  // Legacy valeurs (conservation affichage/édition des anciens dossiers)
+  { value: "validation", label: "Validation (legacy)", price: null },
+  { value: "mise_en_service", label: "Mise en service (legacy)", price: null },
+  { value: "zero_stress", label: "Zéro Stress (legacy)", price: null },
 ] as const;
 
 export type PackValue = (typeof PACKS)[number]["value"];
