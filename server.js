@@ -23,7 +23,10 @@ if (API_PROXY_TARGET) {
       target: API_PROXY_TARGET,
       changeOrigin: true,
       xfwd: true,
-      pathRewrite: (path) => (path.startsWith(API_PROXY_PREFIX) ? path : `${API_PROXY_PREFIX}${path}`),
+      pathRewrite: (path) => {
+        // Strip the /api prefix so /api/leads -> /leads on the target service
+        return path.replace(new RegExp(`^${API_PROXY_PREFIX}`), "") || "/";
+      },
       logLevel: process.env.NODE_ENV === "production" ? "warn" : "info",
     }),
   );
