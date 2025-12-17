@@ -1,31 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Routes, Route, Navigate, Link, useNavigate, useParams } from "react-router-dom";
-import { PACKS } from './constants.ts';
-import ClientLogin from "./client/Login.tsx";
-import ClientDashboard from "./client/Dashboard.tsx";
-import ClientFiles from "./client/Files.tsx";
-import ClientFileDetail from "./client/FileDetail.tsx";
-import { ClientRoute } from "./client/ClientRoute.tsx";
-import AdminDashboard from "./admin/AdminDashboard.tsx";
-import AdminFileDetail from "./admin/AdminFileDetail.tsx";
-import AdminPlanning from "./admin/AdminPlanning.tsx";
-import OperatorBoard from "./admin/OperatorBoard.tsx";
-import LeadDetail from "./admin/LeadDetail.tsx";
-import { createFileSafeClient } from "./lib/firestore.ts";
-import { useCollection } from "./hooks/useCollection.tsx";
-import DevSeed from "./admin/DevSeed.tsx";
-import FixInstallerIds from "./admin/FixInstallerIds.tsx";
-import { useAuth } from "./hooks/useAuth.tsx";
-import LoginAdmin from "./admin/LoginAdmin.tsx";
-import { API_URL } from "./api/client";
-import { AuthDebug } from "./debug/AuthDebug";
 
-const API_BASE = API_URL;
+const API_BASE = 'https://solaire-api-828508661560.europe-west1.run.app';
 const API_TOKEN = 'saftoken-123';
-const PACK_PRICE = PACKS.reduce((acc, p) => {
-  acc[p.value] = p.price ?? null;
-  return acc;
-}, {});
 
 const HomeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -125,7 +101,6 @@ function Kanban({ leads }) {
 }
 
 function LeadsTable({ leads, onSelect }) {
-  const navigate = useNavigate();
   return (
     <div className="card">
       <table className="table">
@@ -141,12 +116,7 @@ function LeadsTable({ leads, onSelect }) {
         </thead>
         <tbody>
           {leads.map((l) => (
-            <tr
-              key={l.id}
-              className="clickable-row"
-              onClick={() => navigate(`/leads/${l.id}`)}
-              style={{ cursor: 'pointer' }}
-            >
+            <tr key={l.id} onClick={() => onSelect(l)} style={{ cursor: 'pointer' }}>
               <td>{l.name || '—'}</td>
               <td>{l.company || l.companyName || '—'}</td>
               <td>{l.email || '—'}</td>
@@ -161,15 +131,57 @@ function LeadsTable({ leads, onSelect }) {
   );
 }
 
-function LeadDetailRoute() {
-  const { id } = useParams();
-  const { data: leads, loading, error } = useCollection("leads");
-  const lead = (leads || []).find((l) => l.id === id);
+function LeadDetail({ lead, clientsById }) {
+  const { data: events, loading } = useFetch(lead ? `${API_BASE}/leads/${lead.id}/events` : null);
+  const [converting, setConverting] = useState(false);
+  if (!lead) return <div className="card">Sélectionne un lead</div>;
+  const linkedClientLabel = lead?.clientId
+    ? (clientsById?.[lead.clientId]?.company || clientsById?.[lead.clientId]?.name || lead.clientId)
+    : null;
 
-  if (loading) return <div className="card">Chargement du lead…</div>;
-  if (error) return <div className="card">Erreur: {String(error)}</div>;
-  if (!lead) return <div className="card">Lead introuvable</div>;
-  return <LeadDetail lead={lead} />;
+  const convert = async () => {
+    setConverting(true);
+    try {
+      const res = await fetch(`${API_BASE}/leads/${lead.id}/convert`, { method: "POST", headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN }, body: JSON.stringify({}) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || res.statusText);
+      // rafraîchir sans recharger la page
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('saf-reload'));
+      }
+    } catch (err) {
+      alert(`Erreur conversion: ${err.message}`);
+    } finally {
+      setConverting(false);
+    }
+  };
+  return (
+    <div className="card">
+      <h3>{lead.name || 'Sans nom'}</h3>
+      <div className="small">{lead.company || lead.companyName || '—'}</div>
+      <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
+      <div className="badge" style={{ marginTop: 8 }}>{lead.status || 'nouveau'}</div>
+      {linkedClientLabel && <div className="pill" style={{ marginTop: 6 }}>Client lié : {linkedClientLabel}</div>}
+      <div style={{ marginTop: 8 }}>
+        <button disabled={converting} onClick={convert} className="btn-primary">
+          {converting ? "Conversion..." : "Convertir en client"}
+        </button>
+      </div>
+      <h4 style={{ marginTop: 16 }}>Historique</h4>
+      {loading && <div>Chargement…</div>}
+      <div className="event-list">
+        {(events || []).map((e) => (
+          <div className="event-item" key={e.id}>
+            <div><strong>{e.type}</strong></div>
+            <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontSize: 12 }}>
+              {JSON.stringify(e.payload, null, 2)}
+            </pre>
+            <div className="small">{e.at?.seconds ? new Date(e.at.seconds * 1000).toLocaleString() : ''}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ClientDetail({ client, onCreatedFile }) {
@@ -180,13 +192,21 @@ function ClientDetail({ client, onCreatedFile }) {
   const createFileForClient = async () => {
     setCreatingFile(true);
     try {
-      const res = await createFileSafeClient({
-        pack: client.pack || "validation",
-        statutGlobal: "en_cours",
-        title: `Dossier ${client.name || "Dossier"}`,
+      const res = await fetch(`${API_BASE}/files`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+        body: JSON.stringify({
+          title: `Dossier ${client.name || client.id}`,
+          clientId: client.id,
+          pack: client.pack || "validation",
+          status: "en_cours",
+          source: "client-conversion",
+        }),
       });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || res.statusText);
       if (onCreatedFile) onCreatedFile();
-      alert(`Dossier créé (${res.reference})`);
+      alert("Dossier créé");
     } catch (err) {
       alert(`Erreur création dossier: ${err.message}`);
     } finally {
@@ -195,7 +215,8 @@ function ClientDetail({ client, onCreatedFile }) {
   };
   return (
     <div className="card">
-      <h3>{client.name || 'Sans nom'}</h3>
+      <h3>{client.name || client.company || 'Sans nom'}</h3>
+      <div className="small">{client.company || '—'}</div>
       <div className="small">{client.email || '—'} · {client.phone || '—'}</div>
       <div className="pill" style={{ marginTop: 6 }}>{client.pack || 'validation'} • {client.segment || 'small'} • {client.status || 'actif'}</div>
       <div style={{ marginTop: 8 }}>
@@ -220,12 +241,15 @@ function ClientDetail({ client, onCreatedFile }) {
   );
 }
 
-function FileDetail({ file, attachments, setAttachments }) {
+function FileDetail({ file, attachments, setAttachments, clientsById }) {
   const { data: events, loading } = useFetch(file ? `${API_BASE}/files/${file.id}/events` : null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState(file || {});
   const fileAttachments = file ? (attachments[file.id] || []) : [];
+  const clientLabel = file
+    ? (clientsById?.[file.clientId]?.company || clientsById?.[file.clientId]?.name || file.clientId || '—')
+    : '—';
 
   useEffect(() => {
     setForm(file || {});
@@ -307,15 +331,30 @@ function FileDetail({ file, attachments, setAttachments }) {
             }
           }
         }
-      } catch (err) {
-        console.warn("Fetch attachment failed", err);
-      }
+      } catch (_e) { /* ignore */ }
+    }
+    // Dernier recours: tenter de télécharger le binaire puis ouvrir
+    if (!url && file?.id) {
+      try {
+        const res = await fetch(`${API_BASE}/files/${file.id}/attachments/${encodeURIComponent(att.name)}`, { headers: { "X-Api-Token": API_TOKEN } });
+        if (res.ok) {
+          const blob = await res.blob();
+          url = URL.createObjectURL(blob);
+          const next = {
+            ...attachments,
+            [file.id]: (attachments[file.id] || []).map((a, i) =>
+              i === idx ? { ...a, url, openUrl: url, preview: a.preview || (blob.type.startsWith("image/") ? url : "") } : a
+            ),
+          };
+          persist(next);
+        }
+      } catch (_e) { /* ignore */ }
     }
     if (url) window.open(url, "_blank", "noopener");
+    else alert("Aucun aperçu dispo. Ré-uploade le PDF pour générer un lien.");
   };
 
-  const saveFile = async (e) => {
-    e.preventDefault();
+  const save = async () => {
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/files/${file.id}`, {
@@ -325,156 +364,146 @@ function FileDetail({ file, attachments, setAttachments }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      alert("Dossier sauvegardé");
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('saf-reload'));
+      }
     } catch (err) {
-      alert(`Erreur sauvegarde: ${err.message}`);
+      alert(`Erreur sauvegarde dossier: ${err.message}`);
     } finally {
       setSaving(false);
     }
   };
-
   return (
     <div className="card">
-      <div className="file-header">
-        <div>
-          <div className="pill soft">
-            {form.statutGlobal || form.status || "en_cours"} • {form.pack || "validation"}
-          </div>
-          <h3 style={{ margin: "6px 0 0" }}>{file.title || "Dossier"}</h3>
-          <div className="small">Client : {file.clientId || "—"} | Prix : {file.price || "—"} | Puissance : {file.power || "—"} | Adresse : {file.address || "—"}</div>
+      <h3>{file.title || 'Dossier sans titre'}</h3>
+      <div className="info-cards">
+        <div className="info-chip">
+          <div className="mini-label">Statut</div>
+          <div className="mini-value">{file.status || 'en_cours'}</div>
+        </div>
+        <div className="info-chip">
+          <div className="mini-label">Pack</div>
+          <div className="mini-value">{file.pack || 'validation'}</div>
+        </div>
+        <div className="info-chip">
+          <div className="mini-label">Client</div>
+          <div className="mini-value">{clientLabel}</div>
+        </div>
+        <div className="info-chip">
+          <div className="mini-label">Prix</div>
+          <div className="mini-value">{file.price || '—'}</div>
         </div>
       </div>
-      <form className="form-grid" onSubmit={saveFile}>
-        <div className="grid-2">
-          <div className="field">
-            <label>Titre</label>
-            <input value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Client ID</label>
-            <input value={form.clientId || ''} onChange={(e) => setForm({ ...form, clientId: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Pack</label>
-            <select value={form.pack || 'validation'} onChange={(e) => setForm({ ...form, pack: e.target.value })}>
-              {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Statut</label>
-            <select value={form.status || 'en_cours'} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="en_cours">En cours</option>
-              <option value="en_attente">En attente</option>
-              <option value="incomplet">Incomplet</option>
-              <option value="finalise">Finalisé</option>
-              <option value="bloque">Bloqué</option>
-              <option value="clos">Clos</option>
-              <option value="gagne">Gagné</option>
-              <option value="perdu">Perdu</option>
-            </select>
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Prix €</label>
-            <input value={form.price || ''} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Adresse</label>
-            <input value={form.address || ''} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Puissance kWc</label>
-            <input value={form.power || ''} onChange={(e) => setForm({ ...form, power: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Mairie</label>
-            <select value={form.mairieStatus || 'a_faire'} onChange={(e) => setForm({ ...form, mairieStatus: e.target.value })}>
-              <option value="a_faire">À faire</option>
-              <option value="depots">Déposée</option>
-              <option value="acceptee">Acceptée</option>
-            </select>
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Consuel</label>
-            <select value={form.consuelStatus || 'a_faire'} onChange={(e) => setForm({ ...form, consuelStatus: e.target.value })}>
-              <option value="a_faire">À faire</option>
-              <option value="planifie">Planifié</option>
-              <option value="ok">OK</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Enedis</label>
-            <select value={form.enedisStatus || 'a_faire'} onChange={(e) => setForm({ ...form, enedisStatus: e.target.value })}>
-              <option value="a_faire">À faire</option>
-              <option value="planifie">Planifié</option>
-              <option value="ok">OK</option>
-            </select>
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>EDF OA</label>
-            <select value={form.edfStatus || 'a_faire'} onChange={(e) => setForm({ ...form, edfStatus: e.target.value })}>
-              <option value="a_faire">À faire</option>
-              <option value="planifie">Planifié</option>
-              <option value="ok">OK</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Prochaine action</label>
-            <input value={form.nextAction || ''} onChange={(e) => setForm({ ...form, nextAction: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Date prochaine action</label>
-            <input type="date" value={form.nextActionDate ? String(form.nextActionDate).substring(0, 10) : ''} onChange={(e) => setForm({ ...form, nextActionDate: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Date dépôt mairie</label>
-            <input type="date" value={form.mairieDepositDate ? String(form.mairieDepositDate).substring(0, 10) : ''} onChange={(e) => setForm({ ...form, mairieDepositDate: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Date consuel</label>
-            <input type="date" value={form.consuelVisitDate ? String(form.consuelVisitDate).substring(0, 10) : ''} onChange={(e) => setForm({ ...form, consuelVisitDate: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Réf PDL / PRM Enedis</label>
-            <input value={form.enedisPdL || ''} onChange={(e) => setForm({ ...form, enedisPdL: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>N° contrat EDF OA</label>
-            <input value={form.edfContractNumber || ''} onChange={(e) => setForm({ ...form, edfContractNumber: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Notes</label>
-            <textarea value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          </div>
-        </div>
-        <div style={{ marginTop: 12 }}>
-          <button className="btn-primary" type="submit" disabled={saving}>{saving ? "Sauvegarde..." : "Sauvegarder"}</button>
-        </div>
-      </form>
-
-      <div style={{ marginTop: 16 }}>
-        <h4>Pièces jointes</h4>
-        <input type="file" accept="image/*,.pdf" multiple onChange={handleUpload} disabled={uploading} />
-        <div className="thumb-list">
+      <div className="small">Puissance : {file.power || '—'} | Adresse : {file.address || '—'}</div>
+      <div className="form-grid labeled" style={{ marginTop: 12 }}>
+        <label>
+          <span>Title</span>
+          <input placeholder="Titre" value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </label>
+        <label>
+          <span>Client ID</span>
+          <input placeholder="Client ID" value={form.clientId || ''} onChange={(e) => setForm({ ...form, clientId: e.target.value })} />
+        </label>
+        <label>
+          <span>Pack</span>
+          <select value={form.pack || 'validation'} onChange={(e) => setForm({ ...form, pack: e.target.value })}>
+            <option value="validation">Validation</option>
+            <option value="mise_en_service">Mise en service</option>
+            <option value="zero_stress">Zéro Stress</option>
+          </select>
+        </label>
+        <label>
+          <span>Statut</span>
+          <select value={form.status || 'en_cours'} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+            <option value="en_cours">En cours</option>
+            <option value="bloque">Bloqué</option>
+            <option value="finalise">Finalisé</option>
+          </select>
+        </label>
+        <label>
+          <span>Prix €</span>
+          <input placeholder="Prix €" value={form.price || ''} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+        </label>
+        <label>
+          <span>Adresse</span>
+          <input placeholder="Adresse" value={form.address || ''} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+        </label>
+        <label>
+          <span>Puissance kWc</span>
+          <input placeholder="Puissance kWc" value={form.power || ''} onChange={(e) => setForm({ ...form, power: e.target.value })} />
+        </label>
+        <label>
+          <span>Mairie</span>
+          <select value={form.mairieStatus || 'a_faire'} onChange={(e) => setForm({ ...form, mairieStatus: e.target.value })}>
+            <option value="a_faire">Mairie - à faire</option>
+            <option value="depose">Mairie - déposé</option>
+            <option value="valide">Mairie - validé</option>
+          </select>
+        </label>
+        <label>
+          <span>Consuel</span>
+          <select value={form.consuelStatus || 'a_faire'} onChange={(e) => setForm({ ...form, consuelStatus: e.target.value })}>
+            <option value="a_faire">Consuel - à faire</option>
+            <option value="depose">Consuel - déposé</option>
+            <option value="visite">Consuel - visite programmée</option>
+            <option value="attestation">Consuel - attestation reçue</option>
+          </select>
+        </label>
+        <label>
+          <span>Enedis</span>
+          <select value={form.enedisStatus || 'a_faire'} onChange={(e) => setForm({ ...form, enedisStatus: e.target.value })}>
+            <option value="a_faire">Enedis - à faire</option>
+            <option value="depose">Enedis - déposé</option>
+            <option value="devis">Enedis - devis reçu</option>
+            <option value="travaux">Enedis - travaux programmés</option>
+            <option value="mise_service">Enedis - mise en service</option>
+          </select>
+        </label>
+        <label>
+          <span>EDF OA</span>
+          <select value={form.edfStatus || 'a_faire'} onChange={(e) => setForm({ ...form, edfStatus: e.target.value })}>
+            <option value="a_faire">EDF OA - à faire</option>
+            <option value="depose">EDF OA - déposé</option>
+            <option value="etude">EDF OA - en cours d'étude</option>
+            <option value="signe">EDF OA - contrat signé</option>
+          </select>
+        </label>
+        <label>
+          <span>Date dépôt mairie</span>
+          <input type="date" value={form.mairieDepositDate || ''} onChange={(e) => setForm({ ...form, mairieDepositDate: e.target.value })} />
+        </label>
+        <label>
+          <span>Date visite Consuel</span>
+          <input type="date" value={form.consuelVisitDate || ''} onChange={(e) => setForm({ ...form, consuelVisitDate: e.target.value })} />
+        </label>
+        <label>
+          <span>N° PDL/PRM Enedis</span>
+          <input placeholder="N° PDL/PRM Enedis" value={form.enedisPdL || ''} onChange={(e) => setForm({ ...form, enedisPdL: e.target.value })} />
+        </label>
+        <label>
+          <span>N° contrat EDF OA</span>
+          <input placeholder="N° contrat EDF OA" value={form.edfContractNumber || ''} onChange={(e) => setForm({ ...form, edfContractNumber: e.target.value })} />
+        </label>
+        <label style={{ gridColumn: "1 / -1" }}>
+          <span>Notes</span>
+          <textarea placeholder="Notes" value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} style={{ minHeight: 80 }} />
+        </label>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <button disabled={saving} onClick={save} className="btn-primary">
+          {saving ? "Sauvegarde..." : "Sauvegarder"}
+        </button>
+      </div>
+      <div className="upload-block">
+        <h4>Documents</h4>
+        <input type="file" accept="image/png,image/jpeg,application/pdf" multiple onChange={handleUpload} />
+        {uploading && <div className="small">Upload en cours...</div>}
+        <div className="thumbs">
           {fileAttachments.map((att, idx) => (
-            <div key={idx} className="thumb">
+            <div className="thumb" key={`${att.name}-${idx}`}>
               <button
-                className="thumb-preview"
+                className="thumb-btn"
+                type="button"
                 onClick={() => openAttachment(att, idx)}
                 title="Ouvrir"
               >
@@ -508,19 +537,24 @@ function FileDetail({ file, attachments, setAttachments }) {
   );
 }
 
-function MainApp() {
-  const { user, claims, loading: authLoading } = useAuth();
+export default function App() {
   const [leadPage, setLeadPage] = useState(0);
   const [filePage, setFilePage] = useState(0);
-  const [leadPageSize, setLeadPageSize] = useState(50);
+  const [leadPageSize, setLeadPageSize] = useState(20);
   const [filePageSize, setFilePageSize] = useState(20);
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState('dashboard');
-  const [leadTab, setLeadTab] = useState("new");
   const [category, setCategory] = useState('Panneaux photovoltaïques');
   const [market, setMarket] = useState('BtoC');
   const [attachments, setAttachments] = useState({});
-  const [adminKey, setAdminKey] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("ADMIN_API_KEY") || "" : ""));
+  // hydrate attachments depuis localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("saf-attachments");
+      if (saved) setAttachments(JSON.parse(saved));
+    } catch (_e) { /* ignore */ }
+  }, []);
+  const { data: leadsResp, loading, error } = useFetch(`${API_BASE}/leads?limit=${leadPageSize}&offset=${leadPage * leadPageSize}`, [reloadKey, leadPage, leadPageSize]);
   const { data: clients } = useFetch(`${API_BASE}/clients`, [reloadKey]);
   const { data: filesResp } = useFetch(`${API_BASE}/files?limit=${filePageSize}&offset=${filePage * filePageSize}`, [reloadKey, filePage, filePageSize]);
   const { data: stats } = useFetch(`${API_BASE}/stats`, [reloadKey]);
@@ -529,44 +563,22 @@ function MainApp() {
     window.addEventListener('saf-reload', handler);
     return () => window.removeEventListener('saf-reload', handler);
   }, []);
-  const { data: firebaseClients } = useCollection("clients");
-  const { data: firebaseFiles } = useCollection("files");
-  const { data: leadsResp } = useFetch(`${API_BASE}/leads?limit=${leadPageSize}&offset=${leadPage * leadPageSize}`, [reloadKey, leadPage, leadPageSize]);
   const [selected, setSelected] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [leadFilters, setLeadFilters] = useState({ email: "", search: "" });
+  const [leadFilters, setLeadFilters] = useState({ status: "", source: "", search: "" });
   const [fileFilters, setFileFilters] = useState({ status: "", pack: "", client: "" });
   const [clientFilters, setClientFilters] = useState({ search: "", pack: "", segment: "" });
   const [previewClient, setPreviewClient] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
-  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", source: "landing" });
-  const defaultPack = PACKS[0]?.value || "essentiel";
-  const defaultPrice = PACK_PRICE[defaultPack] != null ? String(PACK_PRICE[defaultPack]) : "";
-  const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: defaultPack, segment: "small", status: "actif" });
-  const [fileForm, setFileForm] = useState({
-    title: "",
-    clientId: "",
-    pack: defaultPack,
-    price: defaultPrice,
-    status: "en_cours",
-    address: "",
-    power: "",
-    mairieDepositDate: "",
-    consuelVisitDate: "",
-    enedisPdL: "",
-    edfContractNumber: "",
-    nextAction: "",
-    nextActionDate: "",
-  });
+  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", volume: "", pack: "", status: "nouveau", source: "landing" });
+  const [clientForm, setClientForm] = useState({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
+  const [fileForm, setFileForm] = useState({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "" });
   const [landingHooked, setLandingHooked] = useState(false);
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingFileId, setEditingFileId] = useState(null);
   const [creatingFileForClient, setCreatingFileForClient] = useState(false);
-  useEffect(() => {
-    setLeadPage(0);
-  }, [leadTab, leadFilters.email, leadFilters.search, leadPageSize]);
   const exportFilesCSV = () => {
     const rows = [
       ["id", "title", "clientId", "status", "pack", "price", "address", "power"]
@@ -593,21 +605,32 @@ function MainApp() {
     URL.revokeObjectURL(url);
   };
   const createFileForClient = async (client) => {
-    if (creatingFileForClient) return;
+    if (!client?.id || creatingFileForClient) return;
+    // Pré-remplit le formulaire dossier et ouvre l'onglet Dossiers au lieu de créer directement
     setCreatingFileForClient(true);
-    try {
-      const res = await createFileSafeClient({
-        pack: client?.pack || defaultPack,
-        statutGlobal: "en_cours",
-        title: `Dossier ${client?.name || "Dossier"}`,
-      });
-      setReloadKey((k) => k + 1);
-      alert(`Dossier créé (${res.reference})`);
-    } catch (err) {
-      alert(`Erreur création dossier: ${err.message}`);
-    } finally {
-      setCreatingFileForClient(false);
-    }
+    setTab('files');
+    setSelectedFile(null);
+    setFileForm({
+      title: `Dossier ${client.name || client.id}`,
+      clientId: client.id,
+      pack: client.pack || "validation",
+      price: "",
+      status: "en_cours",
+      address: "",
+      power: "",
+      mairieDepositDate: "",
+      consuelVisitDate: "",
+      enedisPdL: "",
+      edfContractNumber: "",
+      notes: ""
+    });
+    setEditingFileId(null);
+    // scroll vers le formulaire
+    requestAnimationFrame(() => {
+      const form = document.getElementById("file-form");
+      if (form) form.scrollIntoView({ behavior: "smooth" });
+    });
+    setCreatingFileForClient(false);
   };
 
   const createLead = async (e) => {
@@ -621,7 +644,7 @@ function MainApp() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setForm({ name: "", company: "", email: "", phone: "", source: "landing" });
+      setForm({ name: "", company: "", email: "", phone: "", volume: "", pack: "", status: "nouveau", source: "landing" });
       setReloadKey((k) => k + 1);
     } catch (err) {
       alert(`Erreur création: ${err.message}`);
@@ -641,7 +664,7 @@ function MainApp() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || res.statusText);
-      setClientForm({ name: "", email: "", phone: "", company: "", pack: defaultPack, segment: "small", status: "actif" });
+      setClientForm({ name: "", email: "", phone: "", company: "", pack: "validation", segment: "small", status: "actif" });
       setEditingClientId(null);
       setReloadKey((k) => k + 1);
     } catch (err) {
@@ -650,60 +673,41 @@ function MainApp() {
       setCreating(false);
     }
   };
+  if (leadsResp && !Array.isArray(leadsResp.items)) {
+    console.error('Bad leads payload', leadsResp);
+  }
   if (filesResp && !Array.isArray(filesResp.items)) {
     console.error('Bad files payload', filesResp);
   }
-  const leadsFirebase = Array.isArray(leadsResp?.items) ? leadsResp.items : [];
+  const leads = Array.isArray(leadsResp?.items) ? leadsResp.items : [];
+  const leadsTotal = typeof leadsResp?.total === 'number' ? leadsResp.total : 0;
   const files = Array.isArray(filesResp?.items) ? filesResp.items : [];
   const filesTotal = typeof filesResp?.total === 'number' ? filesResp.total : 0;
-  const landingSnippet = `POST ${API_BASE}/leads
+const landingSnippet = `POST ${API_BASE}/leads
 Headers: Content-Type: application/json
          X-Api-Token: ${API_TOKEN}
-Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
+Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume": "...", "pack": "...", "source": "landing-diagnostic-v3" }`;
 
   const ordered = useMemo(
-    () => (leadsFirebase || []).slice().sort((a, b) => {
-      const aDate = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt || 0);
-      const bDate = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt || 0);
-      return bDate - aDate;
-    }),
-    [leadsFirebase]
+    () => (leads || []).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)),
+    [leads]
   );
-  const [leadToast, setLeadToast] = useState(null);
-  const lastLeadTsRef = React.useRef(null);
-  useEffect(() => {
-    if (!ordered?.length) return;
-    const latestTs = (() => {
-      const lead = ordered[0];
-      const ts = lead.createdAt?.seconds ? lead.createdAt.seconds * 1000 : lead.createdAt || Date.now();
-      return typeof ts === "number" ? ts : Date.now();
-    })();
-    if (lastLeadTsRef.current === null) {
-      lastLeadTsRef.current = latestTs;
-      return;
-    }
-    if (latestTs > lastLeadTsRef.current) {
-      const newest = ordered[0];
-      const label = newest.email || newest.name || newest.phone || newest.id;
-      setLeadToast(`Nouveau lead : ${label}`);
-      lastLeadTsRef.current = latestTs;
-    }
-  }, [ordered]);
-  useEffect(() => {
-    if (!leadToast) return undefined;
-    const t = setTimeout(() => setLeadToast(null), 6000);
-    return () => clearTimeout(t);
-  }, [leadToast]);
+  const clientsById = useMemo(() => {
+    const map = {};
+    (clients || []).forEach((c) => { map[c.id] = c; });
+    return map;
+  }, [clients]);
   const filteredLeads = useMemo(() => {
     return (ordered || []).filter((l) => {
-      const matchEmail = leadFilters.email ? (l.email || "").toLowerCase().includes(leadFilters.email.toLowerCase()) : true;
+      const matchStatus = leadFilters.status ? (l.status || '').toLowerCase() === leadFilters.status : true;
+      const matchSource = leadFilters.source ? (l.source || '').toLowerCase().includes(leadFilters.source.toLowerCase()) : true;
       const matchSearch = leadFilters.search
-        ? (l.name || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
-          (l.company || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
-          (l.phone || "").toLowerCase().includes(leadFilters.search.toLowerCase()) ||
-          (l.email || "").toLowerCase().includes(leadFilters.search.toLowerCase())
+        ? (l.name || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+          (l.company || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+          (l.email || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+          (l.phone || '').toLowerCase().includes(leadFilters.search.toLowerCase())
         : true;
-      return matchEmail && matchSearch;
+      return matchStatus && matchSource && matchSearch;
     });
   }, [ordered, leadFilters]);
 
@@ -711,16 +715,18 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
     return (files || []).filter((f) => {
       const matchStatus = fileFilters.status ? (f.status || '').toLowerCase() === fileFilters.status : true;
       const matchPack = fileFilters.pack ? (f.pack || '').toLowerCase() === fileFilters.pack : true;
-      const matchClient = fileFilters.client ? (f.clientId || '').toLowerCase().includes(fileFilters.client.toLowerCase()) : true;
+      const clientLabel = clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || '';
+      const matchClient = fileFilters.client ? clientLabel.toLowerCase().includes(fileFilters.client.toLowerCase()) : true;
       return matchStatus && matchPack && matchClient;
     });
-  }, [files, fileFilters]);
+  }, [files, fileFilters, clientsById]);
 
   const filteredClients = useMemo(() => {
-    return (firebaseClients || []).filter((c) => {
+    return (clients || []).filter((c) => {
       const q = clientFilters.search.toLowerCase();
       const matchSearch = q
         ? (c.name || '').toLowerCase().includes(q) ||
+          (c.company || '').toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
           (c.phone || '').toLowerCase().includes(q)
         : true;
@@ -728,43 +734,15 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
       const matchSegment = clientFilters.segment ? (c.segment || '').toLowerCase() === clientFilters.segment : true;
       return matchSearch && matchPack && matchSegment;
     });
-  }, [firebaseClients, clientFilters]);
+  }, [clients, clientFilters]);
 
   return (
-    <>
-      {leadToast && (
-        <div
-          style={{
-            position: "fixed",
-            top: 16,
-            right: 16,
-            background: "#0f172a",
-            color: "#fff",
-            padding: "12px 14px",
-            borderRadius: 12,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-            zIndex: 9999,
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
-          <span>🔔 {leadToast}</span>
-          <button
-            className="btn-secondary"
-            style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "none", cursor: "pointer" }}
-            onClick={() => setLeadToast(null)}
-          >
-            Fermer
-          </button>
-        </div>
-      )}
-      <div className="layout">
-        <aside className="sidebar">
-          <h2>Solaire Admin</h2>
-          {[
-            { key: 'dashboard', label: 'Tableau de bord', icon: <HomeIcon /> },
-            { key: 'leads', label: 'Leads', icon: <LeadsIcon /> },
+    <div className="layout">
+      <aside className="sidebar">
+        <h2>Solaire Admin</h2>
+        {[
+          { key: 'dashboard', label: 'Tableau de bord', icon: <HomeIcon /> },
+          { key: 'leads', label: 'Leads', icon: <LeadsIcon /> },
           { key: 'clients', label: 'Clients', icon: <UsersIcon /> },
           { key: 'files', label: 'Dossiers', icon: <FolderIcon /> },
         ].map((t) => (
@@ -830,138 +808,191 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
       )}
 
 
-      {stats?.leads && tab === 'dashboard' && (
-        <div className="kanban-wrapper">
-          <Kanban leads={leadsFirebase || []} />
-        </div>
-      )}
+      {error && <div className="card">Erreur : {String(error)}</div>}
+      {loading && <div className="card">Chargement…</div>}
 
-      {tab === 'leads' && (
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div className="grid-2">
-            <div className="field">
-              <label>Email</label>
-              <input value={leadFilters.email} onChange={(e) => setLeadFilters({ ...leadFilters, email: e.target.value })} placeholder="Filtrer par email" />
-            </div>
-            <div className="field">
-              <label>Recherche</label>
-              <input value={leadFilters.search} onChange={(e) => setLeadFilters({ ...leadFilters, search: e.target.value })} placeholder="Nom, entreprise, email ou téléphone" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'leads' && !leadsFirebase?.length && (
-        <div className="card">
-          <p>Aucun lead. Pour en créer un, utilise l'API :</p>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{landingSnippet}</pre>
-        </div>
-      )}
-
-      {tab === 'leads' && leadsFirebase?.length > 0 && (
-        <LeadsTable leads={filteredLeads} />
-      )}
-
-      {tab === 'clients' && (
-        <div className="grid-2">
-          <div className="card">
-            <div className="grid-3">
-              <div className="field">
-                <label>Recherche</label>
-                <input value={clientFilters.search} onChange={(e) => setClientFilters({ ...clientFilters, search: e.target.value })} placeholder="Nom, email, téléphone" />
-              </div>
-              <div className="field">
-                <label>Pack</label>
-                <select value={clientFilters.pack} onChange={(e) => setClientFilters({ ...clientFilters, pack: e.target.value })}>
-                  <option value="">Tous</option>
-                  {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Segment</label>
-                <select value={clientFilters.segment} onChange={(e) => setClientFilters({ ...clientFilters, segment: e.target.value })}>
-                  <option value="">Tous</option>
-                  <option value="small">Small</option>
-                  <option value="mid">Mid</option>
-                  <option value="vip">VIP</option>
-                </select>
-              </div>
-            </div>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nom</th>
-                  <th>Email</th>
-                  <th>Téléphone</th>
-                  <th>Pack</th>
-                  <th>Segment</th>
-                  <th>Statut</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClients.map((c) => (
-                  <tr key={c.id} className="clickable-row" onClick={() => setSelectedClient(c)} style={{ cursor: "pointer" }}>
-                    <td>{c.name || "—"}</td>
-                    <td>{c.email || "—"}</td>
-                    <td>{c.phone || "—"}</td>
-                    <td>{PACKS.find((p) => p.value === c.pack)?.label || c.pack || "validation"}</td>
-                    <td>{c.segment || "small"}</td>
-                    <td><span className="badge-status">{c.status || "actif"}</span></td>
-                    <td>
-                      <button className="btn-secondary" onClick={(e) => { e.stopPropagation(); setEditingClientId(c.id); setClientForm(c); }}>Éditer</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <ClientDetail client={selectedClient} onCreatedFile={() => setReloadKey((k) => k + 1)} />
-        </div>
-      )}
-
-      {tab === 'files' && (
+      {tab === 'leads' && !loading && leads && (
         <div className="grid">
-          <div className="card" style={{ gridColumn: "1 / -1" }}>
-            <div className="grid-4">
-              <div className="field">
-                <label>Statut</label>
-                <select value={fileFilters.status} onChange={(e) => setFileFilters({ ...fileFilters, status: e.target.value })}>
-                  <option value="">Tous</option>
+          <div>
+            <div className="card">
+              <h3>Leads</h3>
+              <div className="filters">
+                <select value={leadFilters.status} onChange={(e) => setLeadFilters({ ...leadFilters, status: e.target.value })}>
+                  <option value="">Statut (tous)</option>
                   <option value="nouveau">Nouveau</option>
                   <option value="en_cours">En cours</option>
-                  <option value="en_attente">En attente</option>
-                  <option value="incomplet">Incomplet</option>
-                  <option value="bloque">Bloqué</option>
-                  <option value="finalise">Finalisé</option>
-                  <option value="clos">Clos</option>
                   <option value="gagne">Gagné</option>
                   <option value="perdu">Perdu</option>
                 </select>
-              </div>
-              <div className="field">
-                <label>Pack</label>
-                <select value={fileFilters.pack} onChange={(e) => setFileFilters({ ...fileFilters, pack: e.target.value })}>
-                  <option value="">Tous</option>
-                  {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                <input placeholder="Source" value={leadFilters.source} onChange={(e) => setLeadFilters({ ...leadFilters, source: e.target.value })} />
+                <input placeholder="Recherche nom/entreprise/email/tel" value={leadFilters.search} onChange={(e) => setLeadFilters({ ...leadFilters, search: e.target.value })} />
+                <select value={leadPageSize} onChange={(e) => { setLeadPageSize(Number(e.target.value)); setLeadPage(0); }}>
+                  {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}/page</option>)}
                 </select>
               </div>
-              <div className="field">
-                <label>Client ID</label>
-                <input value={fileFilters.client} onChange={(e) => setFileFilters({ ...fileFilters, client: e.target.value })} placeholder="Filtrer par client" />
-              </div>
-              <div className="field">
-                <label>Taille page</label>
-                <select value={filePageSize} onChange={(e) => setFilePageSize(parseInt(e.target.value, 10) || 20)}>
-                  <option value={10}>10/page</option>
-                  <option value={20}>20/page</option>
-                  <option value={50}>50/page</option>
-                </select>
+              <LeadsTable leads={filteredLeads} onSelect={setSelected} />
+              <div className="filters" style={{ justifyContent: "space-between" }}>
+                <button className="btn-secondary" disabled={leadPage === 0} onClick={() => setLeadPage((p) => Math.max(0, p - 1))}>Précédent</button>
+                <span>Page {leadPage + 1} / {Math.max(1, Math.ceil(leadsTotal / leadPageSize))} ({leadsTotal} leads)</span>
+                <button className="btn-secondary" disabled={(leadPage + 1) * leadPageSize >= leadsTotal} onClick={() => setLeadPage((p) => p + 1)}>Suivant</button>
               </div>
             </div>
           </div>
+          <LeadDetail lead={selected} clientsById={clientsById} />
+        </div>
+      )}
 
-          <div className="card" style={{ gridColumn: "1 / -1" }}>
+      {tab === 'leads' && !loading && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>Créer un lead manuel</h3>
+          <form onSubmit={createLead} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+              <input required placeholder="Nom contact" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input placeholder="Entreprise" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+            <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <input placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <input placeholder="Volume (installations/mois)" value={form.volume} onChange={(e) => setForm({ ...form, volume: e.target.value })} />
+            <input placeholder="Pack" value={form.pack} onChange={(e) => setForm({ ...form, pack: e.target.value })} />
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="nouveau">Nouveau</option>
+              <option value="en_cours">En cours</option>
+              <option value="gagne">Gagné</option>
+              <option value="perdu">Perdu</option>
+            </select>
+            <input placeholder="Source" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} />
+            <button type="submit" disabled={creating} className="btn-primary" style={{ gridColumn: "1 / -1" }}>
+              {creating ? "Création..." : "Créer le lead"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {tab === 'leads' && !loading && leads && (
+        <div style={{ marginTop: 16 }}>
+          <Kanban leads={ordered} />
+        </div>
+      )}
+
+      {tab === 'clients' && !loading && clients && (
+        <div className="grid-clients" style={{ marginTop: 16 }}>
+          <div className="card table-card">
+            <div className="table-header">
+              <h3>Clients</h3>
+              <span className="pill soft">Total : {filteredClients.length}</span>
+            </div>
+            <div className="filters tight">
+              <input placeholder="Recherche nom/entreprise/email/tel" value={clientFilters.search} onChange={(e) => setClientFilters({ ...clientFilters, search: e.target.value })} />
+              <select value={clientFilters.pack} onChange={(e) => setClientFilters({ ...clientFilters, pack: e.target.value })}>
+                <option value="">Pack (tous)</option>
+                <option value="validation">Validation</option>
+                <option value="mise_en_service">Mise en service</option>
+                <option value="zero_stress">Zéro Stress</option>
+              </select>
+              <select value={clientFilters.segment} onChange={(e) => setClientFilters({ ...clientFilters, segment: e.target.value })}>
+                <option value="">Segment (tous)</option>
+                <option value="small">Petit</option>
+                <option value="medium">Moyen</option>
+                <option value="large">Gros</option>
+              </select>
+            </div>
+            <div className="table-wrapper sticky-head">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Nom</th>
+                    <th>Entreprise</th>
+                    <th>Email</th>
+                    <th>Téléphone</th>
+                  <th>Pack</th>
+                  <th>Segment</th>
+                  <th>Statut</th>
+                  <th style={{ width: 190 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredClients.map((c) => (
+                    <tr
+                      key={c.id}
+                      className={`clickable ${selectedClient?.id === c.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedClient(c)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <td>{c.name || "—"}</td>
+                      <td>{c.company || "—"}</td>
+                      <td>{c.email || "—"}</td>
+                      <td>{c.phone || "—"}</td>
+                      <td>{c.pack || "validation"}</td>
+                      <td>{c.segment || "small"}</td>
+                      <td><span className={`status-badge ${c.status || 'actif'}`}>{c.status || 'actif'}</span></td>
+                      <td>
+                        <div className="actions" onClick={(e) => e.stopPropagation()}>
+                          <button className="btn-icon view" title="Voir la fiche" aria-label="Voir" onClick={() => { setSelectedClient(c); setPreviewClient(c); }}><EyeIcon /> Voir</button>
+                          <button className="btn-icon edit" title="Éditer" aria-label="Éditer" onClick={() => { setClientForm({ name: c.name || "", email: c.email || "", phone: c.phone || "", company: c.company || "", pack: c.pack || "validation", segment: c.segment || "small", status: c.status || "actif" }); setEditingClientId(c.id); }}><EditIcon /> Éditer</button>
+                          <button className="btn-icon file" title="Créer un dossier pour ce client" aria-label="Créer dossier" onClick={() => createFileForClient(c)}><FolderIcon /> Dossier</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <ClientDetail client={selectedClient} onCreatedFile={() => setReloadKey((k) => k + 1)} />
+          <div className="card">
+            <h3>{editingClientId ? "Éditer le client" : "Créer un client"}</h3>
+            <form onSubmit={createClient} className="two-cols">
+              <input required placeholder="Nom/Entreprise" value={clientForm.name} onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })} />
+              <input placeholder="Email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} />
+              <input placeholder="Téléphone" value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} />
+              <input placeholder="Société" value={clientForm.company} onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })} />
+              <select value={clientForm.pack} onChange={(e) => setClientForm({ ...clientForm, pack: e.target.value })}>
+                <option value="validation">Validation</option>
+                <option value="mise_en_service">Mise en service</option>
+                <option value="zero_stress">Zéro Stress</option>
+              </select>
+              <select value={clientForm.segment} onChange={(e) => setClientForm({ ...clientForm, segment: e.target.value })}>
+                <option value="small">Petit</option>
+                <option value="medium">Moyen</option>
+                <option value="large">Gros</option>
+              </select>
+              <select value={clientForm.status} onChange={(e) => setClientForm({ ...clientForm, status: e.target.value })}>
+                <option value="actif">Actif</option>
+                <option value="inactif">Inactif</option>
+                <option value="vip">VIP</option>
+              </select>
+              <button type="submit" disabled={creating} className="btn-primary" style={{ gridColumn: "1 / -1" }}>
+                {creating ? "En cours..." : editingClientId ? "Mettre à jour" : "Créer le client"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {tab === 'files' && !loading && files && (
+        <div className="grid" style={{ marginTop: 16 }}>
+          <div className="card">
+            <h3>Dossiers</h3>
+            <div className="filters">
+              <select value={fileFilters.status} onChange={(e) => setFileFilters({ ...fileFilters, status: e.target.value })}>
+                <option value="">Statut (tous)</option>
+                <option value="en_cours">En cours</option>
+                <option value="bloque">Bloqué</option>
+                <option value="finalise">Finalisé</option>
+              </select>
+              <select value={fileFilters.pack} onChange={(e) => setFileFilters({ ...fileFilters, pack: e.target.value })}>
+                <option value="">Pack (tous)</option>
+                <option value="validation">Validation</option>
+                <option value="mise_en_service">Mise en service</option>
+                <option value="zero_stress">Zéro Stress</option>
+              </select>
+              <input placeholder="Client / Entreprise" value={fileFilters.client} onChange={(e) => setFileFilters({ ...fileFilters, client: e.target.value })} />
+              <select value={filePageSize} onChange={(e) => { setFilePageSize(Number(e.target.value)); setFilePage(0); }}>
+                {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}/page</option>)}
+              </select>
+            </div>
+            <div className="action-bar">
+              <button className="btn-secondary" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>Aller au formulaire dossier</button>
+              <button className="btn-secondary" onClick={exportFilesCSV}>Exporter CSV</button>
+            </div>
             <table className="table">
               <thead>
                 <tr>
@@ -970,281 +1001,201 @@ Body: { "name": "...", "email": "...", "phone": "...", "source": "landing" }`;
                   <th>Statut</th>
                   <th>Pack</th>
                   <th>Prix</th>
-                  <th>Actions</th>
+                  <th style={{ width: 160 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredFiles.map((f) => (
-                  <tr key={f.id} className="clickable-row" onClick={() => setPreviewFile(f)} style={{ cursor: "pointer" }}>
-                    <td>{f.title || f.id}</td>
-                    <td>{f.clientId || "—"}</td>
-                    <td><span className={`badge-status ${f.status || "en_cours"}`}>{f.status || "en_cours"}</span></td>
-                    <td>{PACKS.find((p) => p.value === f.pack)?.label || f.pack || "validation"}</td>
-                    <td>{f.price || "—"}</td>
-                    <td style={{ display: "flex", gap: 8 }}>
-                      <button className="btn-secondary" onClick={(e) => { e.stopPropagation(); setSelectedFile(f); }}>Voir</button>
-                      <button className="btn-secondary" onClick={(e) => { e.stopPropagation(); setEditingFileId(f.id); setFileForm(f); }}>Éditer</button>
+                  <tr
+                    key={f.id}
+                    className={`clickable ${selectedFile?.id === f.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedFile(f)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td>{f.title || "—"}</td>
+                    <td>{clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || "—"}</td>
+                    <td><span className={`badge-status ${f.status || 'en_cours'}`}>{f.status || "en_cours"}</span></td>
+                  <td>{f.pack || "validation"}</td>
+                  <td>{f.price || "—"}</td>
+                  <td>
+                    <div className="actions" onClick={(e) => e.stopPropagation()}>
+                        <button className="btn-icon view" title="Voir le dossier" aria-label="Voir" onClick={() => { setSelectedFile(f); setPreviewFile(f); }}><EyeIcon /> Voir</button>
+                        <button
+                          className="btn-icon edit"
+                          title="Éditer"
+                          aria-label="Éditer"
+                          onClick={() => {
+                            setSelectedFile(f);
+                            setFileForm({
+                              title: f.title || "",
+                              clientId: f.clientId || "",
+                              pack: f.pack || "validation",
+                              price: f.price || "",
+                              status: f.status || "en_cours",
+                              address: f.address || "",
+                              power: f.power || "",
+                              mairieDepositDate: f.mairieDepositDate || "",
+                              consuelVisitDate: f.consuelVisitDate || "",
+                              enedisPdL: f.enedisPdL || "",
+                              edfContractNumber: f.edfContractNumber || "",
+                              notes: f.notes || "",
+                            });
+                            setEditingFileId(f.id);
+                          }}
+                        >
+                          <EditIcon /> Éditer
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="pagination">
-              <button onClick={() => setFilePage((p) => Math.max(0, p - 1))} disabled={filePage === 0}>Précédent</button>
-              <div>Page {filePage + 1}</div>
-              <button onClick={() => setFilePage((p) => p + 1)} disabled={(filePage + 1) * filePageSize >= filesTotal}>Suivant</button>
-              <button className="btn-secondary" onClick={exportFilesCSV} style={{ marginLeft: "auto" }}>Exporter CSV</button>
+            <div className="filters" style={{ justifyContent: "space-between" }}>
+              <button disabled={filePage === 0} onClick={() => setFilePage((p) => Math.max(0, p - 1))}>Précédent</button>
+              <span>Page {filePage + 1}</span>
+                <button className="btn-secondary" disabled={(filePage + 1) * filePageSize >= filesTotal} onClick={() => setFilePage((p) => p + 1)}>Suivant</button>
             </div>
           </div>
-
-          <div className="card" style={{ gridColumn: "1 / 3" }}>
-            <h3>Créer un lead</h3>
-            <form className="form-grid" onSubmit={createLead}>
-              <div className="grid-2">
-                <div className="field"><label>Nom</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-                <div className="field"><label>Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              </div>
-              <div className="grid-2">
-                <div className="field"><label>Téléphone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-                <div className="field"><label>Source</label><input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} /></div>
-              </div>
-              <button className="btn-primary" type="submit" disabled={creating}>{creating ? "Création..." : "Créer"}</button>
-            </form>
-          </div>
-
-          <div className="card" style={{ gridColumn: "3 / 5" }}>
-            <h3>Créer / éditer client</h3>
-            <form className="form-grid" onSubmit={createClient}>
-              <div className="grid-2">
-                <div className="field"><label>Nom</label><input value={clientForm.name} onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })} /></div>
-                <div className="field"><label>Email</label><input value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} /></div>
-              </div>
-              <div className="grid-2">
-                <div className="field"><label>Téléphone</label><input value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} /></div>
-                <div className="field"><label>Entreprise</label><input value={clientForm.company} onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })} /></div>
-              </div>
-              <div className="grid-3">
-                <div className="field">
-                  <label>Pack</label>
-                  <select value={clientForm.pack} onChange={(e) => setClientForm({ ...clientForm, pack: e.target.value })}>
-                    {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Segment</label>
-                  <select value={clientForm.segment} onChange={(e) => setClientForm({ ...clientForm, segment: e.target.value })}>
-                    <option value="small">Small</option>
-                    <option value="mid">Mid</option>
-                    <option value="vip">VIP</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Statut</label>
-                  <select value={clientForm.status} onChange={(e) => setClientForm({ ...clientForm, status: e.target.value })}>
-                    <option value="actif">Actif</option>
-                    <option value="inactif">Inactif</option>
-                  </select>
-                </div>
-              </div>
-              <button className="btn-primary" type="submit" disabled={creating}>{creating ? "Sauvegarde..." : "Sauvegarder"}</button>
-              {editingClientId && <button className="btn-secondary" type="button" onClick={() => { setEditingClientId(null); setClientForm({ name: "", email: "", phone: "", company: "", pack: defaultPack, segment: "small", status: "actif" }); }}>Réinitialiser</button>}
-            </form>
-          </div>
-
-          <div className="card" style={{ gridColumn: "1 / 3" }}>
-            <h3>Créer / éditer un dossier</h3>
-            <form className="form-grid" onSubmit={async (e) => {
+          <FileDetail file={selectedFile} attachments={attachments} setAttachments={setAttachments} clientsById={clientsById} />
+          <div className="card" style={{ gridColumn: "1 / -1" }}>
+            <h3>Créer un dossier</h3>
+            <form onSubmit={async (e) => {
               e.preventDefault();
               setCreating(true);
               try {
-                const res = await fetch(`${API_BASE}/files${editingFileId ? `/${editingFileId}` : ""}`, {
-                  method: editingFileId ? "PATCH" : "POST",
-                  headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
-                  body: JSON.stringify({ ...fileForm, id: editingFileId || undefined }),
-                });
-                const body = await res.json();
-                if (!res.ok) throw new Error(body?.error || res.statusText);
-                setFileForm({ title: "", clientId: "", pack: defaultPack, price: defaultPrice, status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" });
-                setEditingFileId(null);
-                setReloadKey((k) => k + 1);
-              } catch (err) {
-                alert(`Erreur création dossier: ${err.message}`);
-              } finally {
-                setCreating(false);
-              }
-            }}>
-              <div className="grid-2">
-                <div className="field"><label>Titre</label><input value={fileForm.title} onChange={(e) => setFileForm({ ...fileForm, title: e.target.value })} /></div>
-                <div className="field"><label>Client ID</label><input value={fileForm.clientId} onChange={(e) => setFileForm({ ...fileForm, clientId: e.target.value })} /></div>
-              </div>
-              <div className="grid-3">
-          <div className="field">
-            <label>Pack</label>
-            <select
-              value={fileForm.pack}
-              onChange={(e) => {
-                const nextPack = e.target.value;
-                const nextPrice = PACK_PRICE[nextPack];
-                setFileForm((prev) => {
-                  const prevDefault = PACK_PRICE[prev.pack] != null ? String(PACK_PRICE[prev.pack]) : "";
-                  const shouldAutofill = !prev.price || prev.price === prevDefault;
-                  return {
-                    ...prev,
-                    pack: nextPack,
-                    price: shouldAutofill && nextPrice != null ? String(nextPrice) : prev.price,
-                  };
-                });
-              }}
-            >
-              {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
-                <div className="field">
-                  <label>Statut</label>
-                  <select value={fileForm.status} onChange={(e) => setFileForm({ ...fileForm, status: e.target.value })}>
-                    <option value="en_cours">En cours</option>
-                    <option value="en_attente">En attente</option>
-                    <option value="incomplet">Incomplet</option>
-                    <option value="finalise">Finalisé</option>
-                    <option value="bloque">Bloqué</option>
-                    <option value="clos">Clos</option>
-                    <option value="gagne">Gagné</option>
-                    <option value="perdu">Perdu</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Prix</label>
-                  <input value={fileForm.price} onChange={(e) => setFileForm({ ...fileForm, price: e.target.value })} />
-                </div>
-              </div>
-              <div className="grid-2">
-                <div className="field"><label>Adresse</label><input value={fileForm.address} onChange={(e) => setFileForm({ ...fileForm, address: e.target.value })} /></div>
-                <div className="field"><label>Puissance</label><input value={fileForm.power} onChange={(e) => setFileForm({ ...fileForm, power: e.target.value })} /></div>
-              </div>
-              <div className="grid-2">
-                <div className="field"><label>Mairie dépôt</label><input type="date" value={fileForm.mairieDepositDate} onChange={(e) => setFileForm({ ...fileForm, mairieDepositDate: e.target.value })} /></div>
-                <div className="field"><label>Consuel visite</label><input type="date" value={fileForm.consuelVisitDate} onChange={(e) => setFileForm({ ...fileForm, consuelVisitDate: e.target.value })} /></div>
-              </div>
-              <div className="grid-2">
-                <div className="field"><label>Enedis PDL</label><input value={fileForm.enedisPdL} onChange={(e) => setFileForm({ ...fileForm, enedisPdL: e.target.value })} /></div>
-                <div className="field"><label>EDF contrat</label><input value={fileForm.edfContractNumber} onChange={(e) => setFileForm({ ...fileForm, edfContractNumber: e.target.value })} /></div>
-              </div>
-              <div className="grid-2">
-                <div className="field"><label>Next action</label><input value={fileForm.nextAction} onChange={(e) => setFileForm({ ...fileForm, nextAction: e.target.value })} /></div>
-                <div className="field"><label>Date action</label><input type="date" value={fileForm.nextActionDate} onChange={(e) => setFileForm({ ...fileForm, nextActionDate: e.target.value })} /></div>
-              </div>
-              <div className="field">
-                <label>Notes</label>
-                <textarea value={fileForm.notes} onChange={(e) => setFileForm({ ...fileForm, notes: e.target.value })} />
-              </div>
-              <div style={{ display: "flex", gap: 12 }}>
-                <button className="btn-primary" type="submit" disabled={creating}>{creating ? "Sauvegarde..." : "Sauvegarder"}</button>
-                {editingFileId && <button className="btn-secondary" type="button" onClick={() => { setEditingFileId(null); setFileForm({ title: "", clientId: "", pack: defaultPack, price: defaultPrice, status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "", nextAction: "", nextActionDate: "" }); }}>Réinitialiser</button>}
-              </div>
+            const res = await fetch(`${API_BASE}/files`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+              body: JSON.stringify({ ...fileForm, id: editingFileId || undefined }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body?.error || res.statusText);
+            setFileForm({ title: "", clientId: "", pack: "validation", price: "", status: "en_cours", address: "", power: "", mairieDepositDate: "", consuelVisitDate: "", enedisPdL: "", edfContractNumber: "" });
+            setEditingFileId(null);
+            setReloadKey((k) => k + 1);
+          } catch (err) {
+            alert(`Erreur dossier: ${err.message}`);
+          } finally {
+            setCreating(false);
+          }
+        }} className="two-cols" id="file-form">
+              <input required placeholder="Titre dossier" value={fileForm.title} onChange={(e) => setFileForm({ ...fileForm, title: e.target.value })} />
+              <input placeholder="Client ID" value={fileForm.clientId} onChange={(e) => setFileForm({ ...fileForm, clientId: e.target.value })} />
+              <select value={fileForm.pack} onChange={(e) => setFileForm({ ...fileForm, pack: e.target.value })}>
+                <option value="validation">Validation</option>
+                <option value="mise_en_service">Mise en service</option>
+                <option value="zero_stress">Zéro Stress</option>
+              </select>
+              <select value={fileForm.status} onChange={(e) => setFileForm({ ...fileForm, status: e.target.value })}>
+                <option value="en_cours">En cours</option>
+                <option value="bloque">Bloqué</option>
+                <option value="finalise">Finalisé</option>
+              </select>
+              <input placeholder="Prix €" value={fileForm.price} onChange={(e) => setFileForm({ ...fileForm, price: e.target.value })} />
+              <input placeholder="Adresse" value={fileForm.address} onChange={(e) => setFileForm({ ...fileForm, address: e.target.value })} />
+              <input placeholder="Puissance kWc" value={fileForm.power} onChange={(e) => setFileForm({ ...fileForm, power: e.target.value })} />
+              <input placeholder="Date dépôt mairie" value={fileForm.mairieDepositDate || ''} onChange={(e) => setFileForm({ ...fileForm, mairieDepositDate: e.target.value })} />
+              <input placeholder="Date visite Consuel" value={fileForm.consuelVisitDate || ''} onChange={(e) => setFileForm({ ...fileForm, consuelVisitDate: e.target.value })} />
+              <input placeholder="N° PDL/PRM Enedis" value={fileForm.enedisPdL || ''} onChange={(e) => setFileForm({ ...fileForm, enedisPdL: e.target.value })} />
+              <input placeholder="N° contrat EDF OA" value={fileForm.edfContractNumber || ''} onChange={(e) => setFileForm({ ...fileForm, edfContractNumber: e.target.value })} />
+              <button type="submit" disabled={creating} className="btn-primary" style={{ gridColumn: "1 / -1" }}>
+                {creating ? "Création..." : "Créer le dossier"}
+              </button>
             </form>
           </div>
-
-          <div className="card" style={{ gridColumn: "3 / 5" }}>
-            <h3>Fiche dossier</h3>
-            <FileDetail file={selectedFile} attachments={attachments} setAttachments={setAttachments} />
-          </div>
         </div>
       )}
-
-      {tab === 'leads' && selected && (
-        <div className="card">
-          <h3>{selected.name || 'Lead'}</h3>
-          <div className="small">Email: {selected.email || '—'} · Tel: {selected.phone || '—'}</div>
-        </div>
+      {tab === 'files' && (
+        <button
+          className="fab"
+          onClick={() => {
+            const form = document.getElementById("file-form");
+            if (form) form.scrollIntoView({ behavior: "smooth" });
+          }}
+          aria-label="Nouveau dossier"
+          title="Nouveau dossier"
+        >
+          +
+        </button>
       )}
 
-      {tab === 'leads' && (
-        <div className="card">
-          <h3>API Landing</h3>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{landingSnippet}</pre>
-        </div>
-      )}
-
-      {tab === 'clients' && (
-        <div className="card">
-          <h3>Formulaire client</h3>
-          <div className="grid-2">
-            <div className="field">
-              <label>Nom</label>
-              <input value={clientForm.name} onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })} />
+      {previewClient && (
+        <div className="modal-backdrop" onClick={() => setPreviewClient(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="pill soft">Client</div>
+                <h3 style={{ margin: "6px 0 0" }}>{previewClient.name || "Sans nom"}</h3>
+                <div className="small">{previewClient.company || "—"}</div>
+                <div className="small">{previewClient.email || "—"} · {previewClient.phone || "—"}</div>
+              </div>
+              <button className="btn-icon" onClick={() => setPreviewClient(null)}>✕</button>
             </div>
-            <div className="field">
-              <label>Email</label>
-              <input value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} />
-            </div>
-          </div>
-          <div className="grid-2">
-            <div className="field">
-              <label>Téléphone</label>
-              <input value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>Company</label>
-              <input value={clientForm.company} onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })} />
-            </div>
-          </div>
-          <div className="grid-3">
-            <div className="field">
-              <label>Pack</label>
-              <select value={clientForm.pack} onChange={(e) => setClientForm({ ...clientForm, pack: e.target.value })}>
-                {PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Segment</label>
-              <select value={clientForm.segment} onChange={(e) => setClientForm({ ...clientForm, segment: e.target.value })}>
-                <option value="small">Small</option>
-                <option value="mid">Mid</option>
-                <option value="vip">VIP</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Statut</label>
-              <select value={clientForm.status} onChange={(e) => setClientForm({ ...clientForm, status: e.target.value })}>
-                <option value="actif">Actif</option>
-                <option value="inactif">Inactif</option>
-              </select>
+            <div className="modal-body">
+              <div className="info-cards">
+                <div className="info-chip">
+                  <div className="mini-label">Pack</div>
+                  <div className="mini-value">{previewClient.pack || "validation"}</div>
+                </div>
+                <div className="info-chip">
+                  <div className="mini-label">Segment</div>
+                  <div className="mini-value">{previewClient.segment || "small"}</div>
+                </div>
+                <div className="info-chip">
+                  <div className="mini-label">Statut</div>
+                  <div className="mini-value">{previewClient.status || "actif"}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="btn-primary" onClick={() => { createFileForClient(previewClient); setPreviewClient(null); }}>Créer un dossier</button>
+                <button className="btn-secondary" onClick={() => setPreviewClient(null)}>Fermer</button>
+              </div>
             </div>
           </div>
         </div>
       )}
-
+      {previewFile && (
+        <div className="modal-backdrop" onClick={() => setPreviewFile(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="pill soft">Dossier</div>
+                <h3 style={{ margin: "6px 0 0" }}>{previewFile.title || "Sans titre"}</h3>
+                <div className="small">
+                  Client : {clientsById[previewFile.clientId]?.company || clientsById[previewFile.clientId]?.name || previewFile.clientId || "—"} • Pack : {previewFile.pack || "validation"}
+                </div>
+              </div>
+              <button className="btn-icon" onClick={() => setPreviewFile(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="info-cards">
+                <div className="info-chip">
+                  <div className="mini-label">Statut</div>
+                  <div className="mini-value">{previewFile.status || "en_cours"}</div>
+                </div>
+                <div className="info-chip">
+                  <div className="mini-label">Prix</div>
+                  <div className="mini-value">{previewFile.price || "—"}</div>
+                </div>
+                <div className="info-chip">
+                  <div className="mini-label">Puissance</div>
+                  <div className="mini-value">{previewFile.power || "—"}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <div className="small">Adresse : {previewFile.address || "—"}</div>
+                <div className="small" style={{ marginTop: 4 }}>Consuel : {previewFile.consuelStatus || "—"} • Enedis : {previewFile.enedisStatus || "—"} • EDF OA : {previewFile.edfStatus || "—"}</div>
+              </div>
+              <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="btn-primary" onClick={() => { setSelectedFile(previewFile); setPreviewFile(null); }}>Ouvrir la fiche</button>
+                <button className="btn-secondary" onClick={() => setPreviewFile(null)}>Fermer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </main>
     </div>
-    </>
   );
-}
-
-export default function App() {
-  return (
-    <Routes>
-      <Route path="/login" element={<LoginAdmin />} />
-      <Route path="/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-      <Route path="/dossiers/:id" element={<AdminRoute><AdminFileDetail /></AdminRoute>} />
-      <Route path="/planning" element={<AdminRoute><AdminPlanning /></AdminRoute>} />
-      <Route path="/operator" element={<AdminRoute><OperatorBoard /></AdminRoute>} />
-      <Route path="/leads/:id" element={<AdminRoute><LeadDetailRoute /></AdminRoute>} />
-      <Route path="/dev/seed" element={<AdminRoute><DevSeed /></AdminRoute>} />
-      <Route path="/admin/fix-installer" element={<AdminRoute><FixInstallerIds /></AdminRoute>} />
-      <Route path="/debug/auth" element={<AuthDebug />} />
-
-      <Route path="/client/login" element={<ClientLogin />} />
-      <Route path="/client/dashboard" element={<ClientRoute><ClientDashboard /></ClientRoute>} />
-      <Route path="/client/dossiers" element={<ClientRoute><ClientFiles /></ClientRoute>} />
-      <Route path="/client/dossiers/:id" element={<ClientRoute><ClientFileDetail /></ClientRoute>} />
-
-      <Route path="/" element={<AdminRoute><MainApp /></AdminRoute>} />
-      <Route path="/*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-}
-
-function AdminRoute({ children }) {
-  // Admin non protégé (comportement d'origine : toujours afficher le CRM)
-  return children;
 }
