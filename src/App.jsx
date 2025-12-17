@@ -19,8 +19,23 @@ const PACK_OPTIONS = [
   { code: "SERENITE", label: "Sérénité", price: 449 },
   { code: "FLEX", label: "Flex", price: null },
 ];
-const packLabel = (item) => item?.packLabel || item?.pack || item?.packCode || "—";
-const packPrice = (item) => (item?.packPrice ?? item?.price ?? "—");
+const packLabel = (item) => {
+  if (!item) return "—";
+  if (item.packLabel) return item.packLabel;
+  if (item.pack && typeof item.pack === "object") {
+    return item.pack.label || item.pack.code || "—";
+  }
+  if (item.pack) return item.pack;
+  if (item.packCode) return item.packCode;
+  return "—";
+};
+const packPrice = (item) => {
+  if (!item) return "—";
+  if (item.packPrice !== undefined && item.packPrice !== null && item.packPrice !== "") return item.packPrice;
+  if (item.price !== undefined && item.price !== null && item.price !== "") return item.price;
+  if (item.pack && typeof item.pack === "object" && item.pack.basePrice !== undefined) return item.pack.basePrice;
+  return "—";
+};
 
 const HomeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -770,7 +785,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
   const filteredFiles = useMemo(() => {
     return (files || []).filter((f) => {
       const matchStatus = fileFilters.status ? (f.status || '').toLowerCase() === fileFilters.status : true;
-      const matchPack = fileFilters.pack ? (f.packCode || f.pack || '').toLowerCase() === fileFilters.pack : true;
+      const packCode = (f.packCode || (typeof f.pack === "object" ? f.pack.code : f.pack) || '').toLowerCase();
+      const matchPack = fileFilters.pack ? packCode === fileFilters.pack : true;
       const clientLabel = clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || '';
       const matchClient = fileFilters.client ? clientLabel.toLowerCase().includes(fileFilters.client.toLowerCase()) : true;
       return matchStatus && matchPack && matchClient;
@@ -786,7 +802,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
           (c.email || '').toLowerCase().includes(q) ||
           (c.phone || '').toLowerCase().includes(q)
         : true;
-      const matchPack = clientFilters.pack ? (c.packCode || c.pack || '').toLowerCase() === clientFilters.pack : true;
+      const cPackCode = (c.packCode || (typeof c.pack === "object" ? c.pack.code : c.pack) || '').toLowerCase();
+      const matchPack = clientFilters.pack ? cPackCode === clientFilters.pack : true;
       const matchSegment = clientFilters.segment ? (c.segment || '').toLowerCase() === clientFilters.segment : true;
       return matchSearch && matchPack && matchSegment;
     });
@@ -1034,7 +1051,23 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                       <td>
                         <div className="actions" onClick={(e) => e.stopPropagation()}>
                           <button className="btn-icon view" title="Voir la fiche" aria-label="Voir" onClick={() => { setSelectedClient(c); setPreviewClient(c); }}><EyeIcon /> Voir</button>
-                          <button className="btn-icon edit" title="Éditer" aria-label="Éditer" onClick={() => { setClientForm({ name: c.name || "", email: c.email || "", phone: c.phone || "", company: c.company || "", packCode: c.packCode || PACK_OPTIONS[0].code, packLabel: c.packLabel || c.pack || PACK_OPTIONS[0].label, packPrice: c.packPrice ?? c.price ?? PACK_OPTIONS[0].price, segment: c.segment || "small", status: c.status || "actif" }); setEditingClientId(c.id); }}><EditIcon /> Éditer</button>
+                          <button className="btn-icon edit" title="Éditer" aria-label="Éditer" onClick={() => {
+                            const packObj = typeof c.pack === "object" ? c.pack : null;
+                            const code = c.packCode || packObj?.code || (typeof c.pack === "string" ? c.pack.toUpperCase() : PACK_OPTIONS[0].code);
+                            const opt = PACK_OPTIONS.find((p) => p.code === code) || PACK_OPTIONS[0];
+                            setClientForm({
+                              name: c.name || "",
+                              email: c.email || "",
+                              phone: c.phone || "",
+                              company: c.company || "",
+                              packCode: code,
+                              packLabel: c.packLabel || packObj?.label || opt.label,
+                              packPrice: c.packPrice ?? c.price ?? packObj?.basePrice ?? opt.price,
+                              segment: c.segment || "small",
+                              status: c.status || "actif"
+                            });
+                            setEditingClientId(c.id);
+                          }}><EditIcon /> Éditer</button>
                           <button className="btn-icon file" title="Créer un dossier pour ce client" aria-label="Créer dossier" onClick={() => createFileForClient(c)}><FolderIcon /> Dossier</button>
                         </div>
                       </td>
@@ -1252,14 +1285,14 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               </div>
               <div className="modal-body">
                 <div className="info-cards">
-                  <div className="info-chip">
-                    <div className="mini-label">Pack</div>
+                <div className="info-chip">
+                  <div className="mini-label">Pack</div>
                   <div className="mini-value">{packLabel(previewClient)}</div>
-                  </div>
-                  <div className="info-chip">
-                    <div className="mini-label">Segment</div>
-                    <div className="mini-value">{previewClient.segment || "small"}</div>
-                  </div>
+                </div>
+                <div className="info-chip">
+                  <div className="mini-label">Segment</div>
+                  <div className="mini-value">{previewClient.segment || "small"}</div>
+                </div>
                 <div className="info-chip">
                   <div className="mini-label">Statut</div>
                   <div className="mini-value">{previewClient.status || "actif"}</div>
