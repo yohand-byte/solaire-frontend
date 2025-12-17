@@ -529,9 +529,9 @@ function MainApp() {
     window.addEventListener('saf-reload', handler);
     return () => window.removeEventListener('saf-reload', handler);
   }, []);
-  const { data: leads } = useCollection("leads");
   const { data: firebaseClients } = useCollection("clients");
   const { data: firebaseFiles } = useCollection("files");
+  const { data: leadsResp } = useFetch(`${API_BASE}/leads?limit=${leadPageSize}&offset=${leadPage * leadPageSize}`, [reloadKey, leadPage, leadPageSize]);
   const [selected, setSelected] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -653,7 +653,7 @@ function MainApp() {
   if (filesResp && !Array.isArray(filesResp.items)) {
     console.error('Bad files payload', filesResp);
   }
-  const leadsFirebase = Array.isArray(leads) ? leads : [];
+  const leadsFirebase = Array.isArray(leadsResp?.items) ? leadsResp.items : [];
   const files = Array.isArray(filesResp?.items) ? filesResp.items : [];
   const filesTotal = typeof filesResp?.total === 'number' ? filesResp.total : 0;
   const landingSnippet = `POST ${API_BASE}/leads
