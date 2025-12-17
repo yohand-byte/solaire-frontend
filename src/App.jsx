@@ -192,6 +192,9 @@ function LeadDetail({ lead, clientsById }) {
         if (res.status === 409 || body?.error === "lead_already_converted") throw new Error("Ce lead a déjà été converti");
         throw new Error(body?.error || res.statusText);
       }
+      if (body?.clientId && typeof window !== "undefined") {
+        lead.clientId = body.clientId;
+      }
       // rafraîchir sans recharger la page
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('saf-reload'));
@@ -240,12 +243,17 @@ function LeadDetail({ lead, clientsById }) {
   );
 }
 
-function ClientDetail({ client, onCreatedFile }) {
+function ClientDetail({ client, onCreatedFile, existingFiles = [] }) {
   const { data: events, loading } = useFetch(client ? `${API_BASE}/clients/${client.id}/events` : null);
   const [creatingFile, setCreatingFile] = useState(false);
   if (!client) return <div className="card">Sélectionne un client</div>;
+  const hasFile = existingFiles.length > 0;
 
   const createFileForClient = async () => {
+    if (hasFile) {
+      alert("Un dossier existe déjà pour ce client.");
+      return;
+    }
     setCreatingFile(true);
     try {
       const code = (client.packCode || (typeof client.pack === "object" ? client.pack.code : client.pack) || PACK_OPTIONS[0].code).toString().toUpperCase();
@@ -285,8 +293,8 @@ function ClientDetail({ client, onCreatedFile }) {
       <div className="small">{client.email || '—'} · {client.phone || '—'}</div>
       <div className="pill" style={{ marginTop: 6 }}>{packLabel(client)} • {packPrice(client)} € • {client.segment || 'small'} • {client.status || 'actif'}</div>
       <div style={{ marginTop: 8 }}>
-        <button disabled={creatingFile} onClick={createFileForClient} className="btn-primary">
-          {creatingFile ? "Création..." : "Créer un dossier pour ce client"}
+        <button disabled={creatingFile || hasFile} onClick={createFileForClient} className="btn-primary">
+          {hasFile ? "Dossier déjà créé" : creatingFile ? "Création..." : "Créer un dossier pour ce client"}
         </button>
       </div>
       <h4 style={{ marginTop: 16 }}>Historique client</h4>
@@ -1228,7 +1236,11 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               </table>
             </div>
           </div>
-          <ClientDetail client={selectedClient} onCreatedFile={() => setReloadKey((k) => k + 1)} />
+          <ClientDetail
+            client={selectedClient}
+            existingFiles={(files || []).filter((f) => f.clientId === (selectedClient?.id || ""))}
+            onCreatedFile={() => setReloadKey((k) => k + 1)}
+          />
           <div className="card">
             <h3>{editingClientId ? "Éditer le client" : "Créer un client"}</h3>
             <form onSubmit={createClient} className="two-cols">
