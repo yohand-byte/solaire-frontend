@@ -21,7 +21,10 @@ const PACK_OPTIONS = [
 ];
 const packLabel = (item) => {
   if (!item) return "—";
-  if (item.packLabel) return item.packLabel;
+  if (item.packLabel) {
+    if (typeof item.packLabel === "object") return item.packLabel.label || item.packLabel.code || "—";
+    return item.packLabel;
+  }
   if (item.pack && typeof item.pack === "object") {
     return item.pack.label || item.pack.code || "—";
   }
