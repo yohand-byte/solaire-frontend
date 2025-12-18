@@ -256,5 +256,8 @@ export async function findClientIdByEmail(db: Firestore, email: string | null | 
     query(collection(db, "clients"), where("email", "==", email), limit(1))
   );
   const docSnap = snap.docs[0];
+  if (!docSnap) {
+    console.warn("[findClientIdByEmail] no client found for email", email);
+  }
   return docSnap ? docSnap.id : null;
 }
