@@ -15,6 +15,7 @@ import {
   updateDoc,
   where,
   orderBy,
+  limit,
 } from "firebase/firestore";
 import type {
   Client,
@@ -247,4 +248,13 @@ export async function ensureUserDoc(
       { merge: true }
     );
   });
+}
+
+export async function findClientIdByEmail(db: Firestore, email: string | null | undefined) {
+  if (!email) return null;
+  const snap = await getDocs(
+    query(collection(db, "clients"), where("email", "==", email), limit(1))
+  );
+  const docSnap = snap.docs[0];
+  return docSnap ? docSnap.id : null;
 }

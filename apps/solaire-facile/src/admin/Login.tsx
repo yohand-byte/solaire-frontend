@@ -38,6 +38,11 @@ export default function AdminLogin() {
         const isAdmin =
           Boolean((token.claims as any).admin) || whitelist.includes(user.uid);
         if (isAdmin) {
+          await ensureUserDoc({
+            role: "admin",
+            email: user.email ?? email,
+            name: user.displayName ?? user.email ?? email,
+          });
           navigate("/admin/dashboard", { replace: true });
         } else {
           await signOut(auth);

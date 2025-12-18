@@ -8,7 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { ThemeToggle } from "../theme";
-import { ensureUserDoc } from "../lib/firestore";
+import { ensureUserDoc, findClientIdByEmail } from "../lib/firestore";
 
 const STORAGE_KEY = "sf_client_email_for_signin";
 
@@ -28,14 +28,21 @@ export default function ClientLogin() {
   );
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
       const isMagicLink = isSignInWithEmailLink(auth, window.location.href);
       if (user && !isMagicLink) {
+        const clientId = (await findClientIdByEmail(user.email)) ?? user.uid;
+        await ensureUserDoc({
+          role: "client",
+          client_id: clientId,
+          email: user.email ?? email,
+          name: user.displayName ?? user.email ?? email,
+        });
         navigate("/client/dashboard", { replace: true });
       }
     });
     return () => unsub();
-  }, [navigate]);
+  }, [navigate, email]);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) || "";
@@ -61,9 +68,10 @@ export default function ClientLogin() {
         const cred = await signInWithEmailLink(auth, mail, window.location.href);
         const user = cred.user;
         if (user) {
+          const clientId = (await findClientIdByEmail(user.email)) ?? user.uid;
           await ensureUserDoc({
             role: "client",
-            client_id: user.uid,
+            client_id: clientId,
             email: user.email ?? mail,
             name: user.displayName ?? user.email ?? mail,
           });

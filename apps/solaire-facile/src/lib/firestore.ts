@@ -83,3 +83,6 @@ export const ensureUserDoc = (
   if (!userId) throw new Error("Utilisateur non authentifié");
   return shared.ensureUserDoc(db, userId, data);
 };
+
+export const findClientIdByEmail = (email: string | null | undefined) =>
+  shared.findClientIdByEmail(db, email);

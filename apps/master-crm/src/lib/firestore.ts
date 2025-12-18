@@ -167,3 +167,6 @@ export const ensureUserDoc = (
   uid: string,
   data: Parameters<typeof shared.ensureUserDoc>[2]
 ) => shared.ensureUserDoc(db, uid, data);
+
+export const findClientIdByEmail = (email: string | null | undefined) =>
+  shared.findClientIdByEmail(db, email);
