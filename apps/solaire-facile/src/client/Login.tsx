@@ -32,6 +32,9 @@ export default function ClientLogin() {
       const isMagicLink = isSignInWithEmailLink(auth, window.location.href);
       if (user && !isMagicLink) {
         const clientId = (await findClientIdByEmail(user.email)) ?? user.uid;
+        if (!clientId || clientId === user.uid) {
+          setInfo("Compte client non provisionné. Contacte le support pour lier ton compte.");
+        }
         await ensureUserDoc({
           role: "client",
           client_id: clientId,
@@ -69,6 +72,9 @@ export default function ClientLogin() {
         const user = cred.user;
         if (user) {
           const clientId = (await findClientIdByEmail(user.email)) ?? user.uid;
+          if (!clientId || clientId === user.uid) {
+            setInfo("Compte client non provisionné. Contacte le support pour lier ton compte.");
+          }
           await ensureUserDoc({
             role: "client",
             client_id: clientId,

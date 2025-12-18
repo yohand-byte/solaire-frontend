@@ -10,10 +10,20 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
+    function isAdminByClaim() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function isAdminAllowlistUid() {
+      return isSignedIn() && request.auth.uid in [
+        "8G2xjO4WHCVavwXGlseNZOC7KT72",
+      ];
+    }
+
     function isAdmin() {
-      return isSignedIn()
-        && exists(userDocPath())
-        && get(userDocPath()).data.role == "admin";
+      return isAdminByClaim()
+        || isAdminAllowlistUid()
+        || (isSignedIn() && exists(userDocPath()) && get(userDocPath()).data.role == "admin");
     }
 
     function isOwnerClient(clientId) {
@@ -50,7 +60,10 @@ service cloud.firestore {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
       allow create: if isSignedIn()
         && request.auth.uid == uid
-        && request.resource.data.role == "client";
+        && (
+          (request.resource.data.role == "client")
+          || (request.resource.data.role == "admin" && (isAdminByClaim() || isAdminAllowlistUid()))
+        );
       allow update: if isAdmin()
         || (isSignedIn()
           && request.auth.uid == uid
