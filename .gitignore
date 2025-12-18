@@ -68,3 +68,6 @@ dist/
 
 # dataconnect generated files
 .dataconnect
+
+# Local-only
+apps/solaire-facile/.env.local
