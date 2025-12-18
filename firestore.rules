@@ -1,28 +1,25 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function userDoc() {
-      return isSignedIn()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid))
-        : null;
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
     function isAdmin() {
       return isSignedIn()
-        && userDoc() != null
-        && userDoc().exists()
-        && userDoc().data.role == "admin";
+        && exists(userDocPath())
+        && get(userDocPath()).data.role == "admin";
     }
 
     function isOwnerClient(clientId) {
       return isSignedIn()
-        && userDoc() != null
-        && userDoc().exists()
-        && userDoc().data.client_id == clientId;
+        && exists(userDocPath())
+        && get(userDocPath()).data.client_id == clientId;
     }
 
     function clientDossierUpdateAllowed() {
@@ -37,7 +34,9 @@ service cloud.firestore {
     }
 
     match /clients/{clientId} {
-      allow read: if isAdmin() || isOwnerClient(clientId);
+      allow read: if isAdmin()
+        || isOwnerClient(clientId)
+        || (isSignedIn() && resource.data.email == request.auth.token.email);
       allow write: if isAdmin();
     }
 
@@ -49,7 +48,17 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
-      allow write: if isAdmin();
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == "client";
+      allow update: if isAdmin()
+        || (isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.client_id == resource.data.client_id
+          && request.resource.data.diff(resource.data).changedKeys()
+            .hasOnly(["name", "email", "last_login", "updated_at"]));
+      allow delete: if isAdmin();
     }
 
     match /credits_transactions/{txId} {

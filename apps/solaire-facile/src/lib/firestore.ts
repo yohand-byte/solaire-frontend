@@ -80,8 +80,10 @@ export const ensureUserDoc = (
   uid?: string
 ) => {
   const userId = uid ?? auth.currentUser?.uid;
-  if (!userId) throw new Error("Utilisateur non authentifié");
-  return shared.ensureUserDoc(db, userId, data);
+  if (!userId) return Promise.resolve();
+  return shared.ensureUserDoc(db, userId, data).catch((err) => {
+    console.warn("[ensureUserDoc] write refused", err);
+  });
 };
 
 export const findClientIdByEmail = (email: string | null | undefined) =>
