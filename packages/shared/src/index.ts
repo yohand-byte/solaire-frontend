@@ -1,1 +1,1 @@
-export const placeholder = "shared utils here";
+export * from "./firestore";
