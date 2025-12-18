@@ -1,4 +1,4 @@
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
 import * as shared from "@shared/firestore";
 
 export type {
@@ -74,3 +74,12 @@ export const convertLeadToClient = (
   initialCredits: number,
   installationData?: Parameters<typeof shared.convertLeadToClient>[4]
 ) => shared.convertLeadToClient(db, leadId, pack, initialCredits, installationData);
+
+export const ensureUserDoc = (
+  data: Parameters<typeof shared.ensureUserDoc>[2],
+  uid?: string
+) => {
+  const userId = uid ?? auth.currentUser?.uid;
+  if (!userId) throw new Error("Utilisateur non authentifié");
+  return shared.ensureUserDoc(db, userId, data);
+};

@@ -221,3 +221,30 @@ export async function getCreditsHistory(db: Firestore, clientId: string) {
   );
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as CreditTransaction));
 }
+
+export async function ensureUserDoc(
+  db: Firestore,
+  uid: string,
+  data: { role: User["role"]; client_id?: string | null; email?: string | null; name?: string | null; permissions?: string[] }
+) {
+  const ref = doc(db, "users", uid);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const existing = snap.exists() ? snap.data() : {};
+    tx.set(
+      ref,
+      {
+        id: uid,
+        role: data.role,
+        client_id: data.client_id ?? (existing as any).client_id ?? null,
+        email: data.email ?? (existing as any).email ?? null,
+        name: data.name ?? (existing as any).name ?? null,
+        permissions: data.permissions ?? (existing as any).permissions ?? [],
+        created_at: (existing as any).created_at ?? serverTimestamp(),
+        updated_at: serverTimestamp(),
+        last_login: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  });
+}

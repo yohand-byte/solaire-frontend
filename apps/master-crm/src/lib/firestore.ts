@@ -162,3 +162,8 @@ export const convertLeadToClient = (
   initialCredits: number,
   installationData?: Parameters<typeof shared.convertLeadToClient>[4]
 ) => shared.convertLeadToClient(db, leadId, pack, initialCredits, installationData);
+
+export const ensureUserDoc = (
+  uid: string,
+  data: Parameters<typeof shared.ensureUserDoc>[2]
+) => shared.ensureUserDoc(db, uid, data);
