@@ -1,2 +1,0 @@
-import { apiClient } from './client';
-export const adminApi = { dashboard: () => apiClient.get('/admin/dashboard'), users: (params?: any) => apiClient.get('/admin/users', { params }), createUser: (data: any) => apiClient.post('/admin/users', data), updateUser: (id: string, data: any) => apiClient.put(`/admin/users/${id}`, data), deleteUser: (id: string) => apiClient.delete(`/admin/users/${id}`) };

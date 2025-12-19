@@ -1,2 +1,0 @@
-import { apiClient } from './client';
-export const workflowsApi = { createDP: (projectId: string) => apiClient.post(`/workflows/${projectId}/dp`), createConsuel: (projectId: string) => apiClient.post(`/workflows/${projectId}/consuel`), createEnedis: (projectId: string) => apiClient.post(`/workflows/${projectId}/enedis`), getStatus: (id: string) => apiClient.get(`/workflows/${id}`), submit: (id: string) => apiClient.put(`/workflows/${id}/submit`) };
