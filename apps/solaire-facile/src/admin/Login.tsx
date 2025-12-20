@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   getIdTokenResult,
@@ -9,6 +9,9 @@ import {
 import { auth } from "../firebase";
 import { ThemeToggle } from "../theme";
 import { ensureUserDoc } from "../lib/firestore";
+import AuthLayout from "../components/auth/AuthLayout";
+import AuthCard from "../components/auth/AuthCard";
+import AuthInput from "../components/auth/AuthInput";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -22,6 +25,7 @@ export default function AdminLogin() {
     const raw = import.meta.env?.VITE_ADMIN_UIDS as string | undefined;
     return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
   }, []);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     const err = searchParams.get("error");
@@ -85,50 +89,49 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
-        <div className="row mb-2">
-          <div className="hero-content">
-            <p className="title">Console administrateur</p>
-            <p className="subtitle">
-              Gestion des dossiers en temps réel et supervision des installateurs.
-            </p>
-          </div>
-          <div className="cta-row">
-            <ThemeToggle />
-            <span className="badge success">Accès sécurisé</span>
-          </div>
+    <AuthLayout>
+      <AuthCard
+        title="Console administrateur"
+        subtitle="Gestion des dossiers en temps réel et supervision des installateurs."
+        primaryLabel={loading ? "Connexion..." : "Se connecter"}
+        primaryDisabled={loading}
+        onPrimaryClick={() => formRef.current?.requestSubmit()}
+        message={
+          error
+            ? { kind: "error", text: error }
+            : info
+              ? { kind: "success", text: info }
+              : undefined
+        }
+      >
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <ThemeToggle />
+          <span className="badge success">Accès sécurisé</span>
         </div>
 
-        <form className="stack" onSubmit={onSubmit}>
-          <div className="field">
-            <label>Email</label>
-            <input
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="admin@solairefacile.fr"
-              disabled={loading}
-            />
-          </div>
+        <form ref={formRef} className="stack" onSubmit={onSubmit}>
+          <AuthInput
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder=" "
+            disabled={loading}
+          />
 
-          <div className="field">
-            <label>Mot de passe</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="********"
-              disabled={loading}
-            />
-          </div>
+          <AuthInput
+            label="Mot de passe"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder=" "
+            disabled={loading}
+          />
 
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? "Connexion..." : "Se connecter"}
+          <button type="submit" style={{ display: "none" }} aria-hidden tabIndex={-1}>
+            Submit
           </button>
         </form>
 
@@ -136,10 +139,7 @@ export default function AdminLogin() {
           Seuls les comptes autorisés avec droit administrateur peuvent accéder
           à cette interface.
         </p>
-
-        {info && <div className="alert success">{info}</div>}
-        {error && <div className="alert error">{error}</div>}
-      </div>
-    </div>
+      </AuthCard>
+    </AuthLayout>
   );
 }

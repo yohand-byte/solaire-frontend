@@ -10,7 +10,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "firebase": "^12.7.0",
+    "firebase": "^11.10.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.11.0"

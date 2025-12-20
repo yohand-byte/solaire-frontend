@@ -14,7 +14,9 @@ jobs:
           node-version: '18'
       - run: npm ci
       - name: Build frontend
-        run: npm run build
+        run: |
+          npm ci --prefix apps/solaire-facile
+          npm run build --prefix apps/solaire-facile
       - name: Start API
         run: |
           git clone https://github.com/yohand-byte/solaire-api.git /tmp/api

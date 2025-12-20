@@ -15,7 +15,6 @@ import {
   updateDoc,
   where,
   orderBy,
-  limit,
 } from "firebase/firestore";
 import type {
   Client,
@@ -223,41 +222,20 @@ export async function getCreditsHistory(db: Firestore, clientId: string) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as CreditTransaction));
 }
 
-export async function ensureUserDoc(
-  db: Firestore,
-  uid: string,
-  data: { role: User["role"]; client_id?: string | null; email?: string | null; name?: string | null; permissions?: string[] }
-) {
+export async function ensureUserDoc(db: any, uid: string, data: any) {
+  const { doc, getDoc, setDoc } = await import("firebase/firestore");
   const ref = doc(db, "users", uid);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const existing = snap.exists() ? snap.data() : {};
-    tx.set(
-      ref,
-      {
-        id: uid,
-        role: data.role,
-        client_id: data.client_id ?? (existing as any).client_id ?? null,
-        email: data.email ?? (existing as any).email ?? null,
-        name: data.name ?? (existing as any).name ?? null,
-        permissions: data.permissions ?? (existing as any).permissions ?? [],
-        created_at: (existing as any).created_at ?? serverTimestamp(),
-        updated_at: serverTimestamp(),
-        last_login: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  });
+  const snap = await getDoc(ref);
+  if (snap.exists()) return;
+  await setDoc(ref, data, { merge: true });
 }
 
-export async function findClientIdByEmail(db: Firestore, email: string | null | undefined) {
+export async function findClientIdByEmail(db: any, email: string | null | undefined) {
   if (!email) return null;
-  const snap = await getDocs(
-    query(collection(db, "clients"), where("email", "==", email), limit(1))
-  );
-  const docSnap = snap.docs[0];
-  if (!docSnap) {
-    console.warn("[findClientIdByEmail] no client found for email", email);
-  }
-  return docSnap ? docSnap.id : null;
+  const { collection, getDocs, limit, query, where } = await import("firebase/firestore");
+  const q = query(collection(db, "clients"), where("email", "==", String(email).trim().toLowerCase()), limit(1));
+  const snap = await getDocs(q);
+  const doc0 = snap.docs[0];
+  return doc0 ? doc0.id : null;
 }
+
