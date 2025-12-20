@@ -80,9 +80,17 @@ export default function AdminLogin() {
       });
       setInfo("Connexion réussie, redirection...");
       navigate("/admin/dashboard", { replace: true });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setError("Connexion impossible. Vérifie tes identifiants.");
+      const msg =
+        e?.code === "auth/invalid-api-key"
+          ? "Clé API Firebase invalide. Vérifie la configuration."
+          : e?.code === "auth/operation-not-allowed"
+            ? "Méthode email/mot de passe désactivée dans Firebase Auth."
+            : e?.code === "auth/wrong-password"
+              ? "Email ou mot de passe incorrect."
+              : e?.message ?? "Connexion impossible. Vérifie tes identifiants.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
