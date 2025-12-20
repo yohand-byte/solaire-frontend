@@ -21,6 +21,7 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const cooldownUntilRef = useRef<number>(0);
   const whitelist = useMemo(() => {
     const raw = import.meta.env?.VITE_ADMIN_UIDS as string | undefined;
     return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -60,10 +61,22 @@ export default function AdminLogin() {
 
   const onSubmit = async (evt: FormEvent) => {
     evt.preventDefault();
+    const now = Date.now();
+    if (loading) {
+      console.log("[login] submit blocked: loading");
+      return;
+    }
+    if (cooldownUntilRef.current && now < cooldownUntilRef.current) {
+      console.log("[login] cooldown active until", cooldownUntilRef.current);
+      setError("Quota Firebase dépassé, réessaie dans 5-10 minutes.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setInfo(null);
+    console.log("[login] submit clicked");
     try {
+      console.log("[login] signIn start");
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const token = await getIdTokenResult(cred.user, true);
       const isAdmin =
@@ -82,15 +95,21 @@ export default function AdminLogin() {
       navigate("/admin/dashboard", { replace: true });
     } catch (e: any) {
       console.error(e);
-      const msg =
-        e?.code === "auth/invalid-api-key"
-          ? "Clé API Firebase invalide. Vérifie la configuration."
-          : e?.code === "auth/operation-not-allowed"
-            ? "Méthode email/mot de passe désactivée dans Firebase Auth."
-            : e?.code === "auth/wrong-password"
-              ? "Email ou mot de passe incorrect."
-              : e?.message ?? "Connexion impossible. Vérifie tes identifiants.";
-      setError(msg);
+      console.log("[login] signIn error code:", e?.code);
+      if (e?.code === "auth/quota-exceeded") {
+        cooldownUntilRef.current = Date.now() + 5 * 60 * 1000;
+        setError("Quota Firebase dépassé, réessaie dans 5-10 minutes. (auth/quota-exceeded)");
+      } else {
+        const msg =
+          e?.code === "auth/invalid-api-key"
+            ? "Clé API Firebase invalide. Vérifie la configuration."
+            : e?.code === "auth/operation-not-allowed"
+              ? "Méthode email/mot de passe désactivée dans Firebase Auth."
+              : e?.code === "auth/wrong-password"
+                ? "Email ou mot de passe incorrect."
+                : e?.message ?? "Connexion impossible. Vérifie tes identifiants.";
+        setError(`${msg}${e?.code ? ` (${e.code})` : ""}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -101,16 +120,6 @@ export default function AdminLogin() {
       <AuthCard
         title="Console administrateur"
         subtitle="Gestion des dossiers en temps réel et supervision des installateurs."
-        primaryLabel={loading ? "Connexion..." : "Se connecter"}
-        primaryDisabled={loading}
-        onPrimaryClick={() => formRef.current?.requestSubmit()}
-        message={
-          error
-            ? { kind: "error", text: error }
-            : info
-              ? { kind: "success", text: info }
-              : undefined
-        }
       >
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <ThemeToggle />
@@ -138,8 +147,8 @@ export default function AdminLogin() {
             disabled={loading}
           />
 
-          <button type="submit" style={{ display: "none" }} aria-hidden tabIndex={-1}>
-            Submit
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
 
@@ -147,6 +156,9 @@ export default function AdminLogin() {
           Seuls les comptes autorisés avec droit administrateur peuvent accéder
           à cette interface.
         </p>
+
+        {error && <div className="alert error">{error}</div>}
+        {info && <div className="alert success">{info}</div>}
       </AuthCard>
     </AuthLayout>
   );
