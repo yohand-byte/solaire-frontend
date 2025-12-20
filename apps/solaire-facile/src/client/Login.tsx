@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   sendSignInLinkToEmail,
   signInWithEmailLink,
+  signOut,
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { ThemeToggle } from "../theme";
@@ -22,30 +23,52 @@ export default function ClientLogin() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"send" | "complete">("send");
 
-  const redirectUrl = useMemo(
-    () => `${window.location.origin}/client/login`,
+  const redirectUrl = useMemo(() => `${window.location.origin}/client/login`, []);
+
+  const denyUnprovisioned = useCallback(
+    async (msg: string) => {
+      setInfo(msg);
+      setError(null);
+      setProcessingLink(false);
+      setMode("send");
+      try {
+        await signOut(auth);
+      } catch {}
+    },
     []
   );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       const isMagicLink = isSignInWithEmailLink(auth, window.location.href);
-      if (user && !isMagicLink) {
+
+      // Quand on arrive via le lien, c'est finalize() qui gère.
+      if (isMagicLink) return;
+
+      if (user) {
         const clientId = (await findClientIdByEmail(user.email)) ?? user.uid;
+
+        // IMPORTANT: si pas provisionné, on ne va pas au dashboard (sinon boucle)
         if (!clientId || clientId === user.uid) {
-          setInfo("Compte client non provisionné. Contacte le support pour lier ton compte.");
+          await denyUnprovisioned(
+            "Compte client non provisionné. Contacte le support pour lier ton compte."
+          );
+          return;
         }
+
         await ensureUserDoc({
           role: "client",
           client_id: clientId,
           email: user.email ?? email,
           name: user.displayName ?? user.email ?? email,
         });
+
         navigate("/client/dashboard", { replace: true });
       }
     });
+
     return () => unsub();
-  }, [navigate, email]);
+  }, [navigate, email, denyUnprovisioned]);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) || "";
@@ -70,37 +93,43 @@ export default function ClientLogin() {
       try {
         const cred = await signInWithEmailLink(auth, mail, window.location.href);
         const user = cred.user;
-        if (user) {
-          const clientId = (await findClientIdByEmail(user.email)) ?? user.uid;
-          if (!clientId || clientId === user.uid) {
-            setInfo("Compte client non provisionné. Contacte le support pour lier ton compte.");
-          }
-          await ensureUserDoc({
-            role: "client",
-            client_id: clientId,
-            email: user.email ?? mail,
-            name: user.displayName ?? user.email ?? mail,
-          });
+
+        const clientId = (await findClientIdByEmail(user.email)) ?? user.uid;
+
+        // IMPORTANT: si pas provisionné, on STOP ici (sinon boucle)
+        if (!clientId || clientId === user.uid) {
+          localStorage.removeItem(STORAGE_KEY);
+          await denyUnprovisioned(
+            "Compte client non provisionné. Contacte le support pour lier ton compte."
+          );
+          return;
         }
+
+        await ensureUserDoc({
+          role: "client",
+          client_id: clientId,
+          email: user.email ?? mail,
+          name: user.displayName ?? user.email ?? mail,
+        });
+
         localStorage.removeItem(STORAGE_KEY);
         navigate("/client/dashboard", { replace: true });
       } catch (err) {
         console.error(err);
-        setError(
-          "Lien invalide ou expiré. Merci de demander un nouveau lien."
-        );
+        setError("Lien invalide ou expiré. Merci de demander un nouveau lien.");
         setMode("send");
       } finally {
         setProcessingLink(false);
         setLoading(false);
       }
     },
-    [navigate]
+    [navigate, denyUnprovisioned]
   );
 
   useEffect(() => {
     if (mode !== "complete") return;
     if (!isSignInWithEmailLink(auth, window.location.href)) return;
+
     const mail = email || localStorage.getItem(STORAGE_KEY) || "";
     if (mail) {
       finalize(mail);
@@ -114,14 +143,17 @@ export default function ClientLogin() {
     evt.preventDefault();
     setError(null);
     setInfo(null);
+
     if (!email) {
       setError("Merci de renseigner ton email professionnel.");
       return;
     }
+
     if (mode === "complete" && isSignInWithEmailLink(auth, window.location.href)) {
       await finalize(email);
       return;
     }
+
     setLoading(true);
     try {
       await sendSignInLinkToEmail(auth, email, {
@@ -146,9 +178,7 @@ export default function ClientLogin() {
         <div className="row mb-2">
           <div className="hero-content">
             <p className="title">Espace installateur</p>
-            <p className="subtitle">
-              Accède à ton tableau de bord avec un lien sécurisé.
-            </p>
+            <p className="subtitle">Accède à ton tableau de bord avec un lien sécurisé.</p>
           </div>
           <div className="cta-row">
             <ThemeToggle />
@@ -159,9 +189,7 @@ export default function ClientLogin() {
         {(processingLink || mode === "complete") && (
           <div className="pill info mb-2">
             <span className="status-dot" />
-            {processingLink
-              ? "Validation du lien en cours..."
-              : "Saisie de l'email pour finaliser"}
+            {processingLink ? "Validation du lien en cours..." : "Saisie de l'email pour finaliser"}
           </div>
         )}
 
@@ -180,19 +208,12 @@ export default function ClientLogin() {
           </div>
 
           <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading
-              ? mode === "complete"
-                ? "Connexion..."
-                : "Envoi en cours..."
-              : mode === "complete"
-                ? "Finaliser la connexion"
-                : "Recevoir le lien"}
+            {loading ? (mode === "complete" ? "Connexion..." : "Envoi en cours...") : mode === "complete" ? "Finaliser la connexion" : "Recevoir le lien"}
           </button>
         </form>
 
         <p className="helper mt-2">
-          Vérifie ton email puis clique sur “Ouvrir dans l'application” pour être
-          connecté automatiquement.
+          Vérifie ton email puis clique sur “Ouvrir dans l'application” pour être connecté automatiquement.
         </p>
 
         {info && <div className="alert success">{info}</div>}
