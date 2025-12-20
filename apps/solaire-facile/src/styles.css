@@ -574,3 +574,21 @@ a {
   background: var(--border);
   margin: 12px 0;
 }
+
+/* FIX: avoid duplicated two-column login layout */
+.auth-shell {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  padding: 24px !important;
+}
+
+.auth-card {
+  width: 100% !important;
+  max-width: 520px !important;
+}
+
+/* Safety net: prevent any accidental 2-column root layout */
+#root {
+  display: block !important;
+}
