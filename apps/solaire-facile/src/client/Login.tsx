@@ -10,8 +10,12 @@ import {
 import { auth } from "../firebase";
 import { ThemeToggle } from "../theme";
 import { ensureUserDoc, findClientIdByEmail } from "../lib/firestore";
+import AuthLayout from "../components/auth/AuthLayout";
+import AuthCard from "../components/auth/AuthCard";
+import AuthInput from "../components/auth/AuthInput";
 
 const STORAGE_KEY = "sf_client_email_for_signin";
+const DEV_BYPASS_PROVISION = import.meta.env?.VITE_BYPASS_CLIENT_PROVISION === "true";
 
 export default function ClientLogin() {
   const navigate = useNavigate();
@@ -50,15 +54,21 @@ export default function ClientLogin() {
 
         // IMPORTANT: si pas provisionné, on ne va pas au dashboard (sinon boucle)
         if (!clientId || clientId === user.uid) {
-          await denyUnprovisioned(
-            "Compte client non provisionné. Contacte le support pour lier ton compte."
-          );
-          return;
+          if (DEV_BYPASS_PROVISION) {
+            setInfo("Provisionnement bypass (dev). Redirection...");
+          } else {
+            await denyUnprovisioned(
+              "Compte client non provisionné. Contacte le support pour lier ton compte."
+            );
+            return;
+          }
         }
+
+        const resolvedClientId = clientId && clientId !== user.uid ? clientId : user.uid;
 
         await ensureUserDoc({
           role: "client",
-          client_id: clientId,
+          client_id: resolvedClientId,
           email: user.email ?? email,
           name: user.displayName ?? user.email ?? email,
         });
@@ -98,16 +108,22 @@ export default function ClientLogin() {
 
         // IMPORTANT: si pas provisionné, on STOP ici (sinon boucle)
         if (!clientId || clientId === user.uid) {
-          localStorage.removeItem(STORAGE_KEY);
-          await denyUnprovisioned(
-            "Compte client non provisionné. Contacte le support pour lier ton compte."
-          );
-          return;
+          if (DEV_BYPASS_PROVISION) {
+            setInfo("Provisionnement bypass (dev). Redirection...");
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+            await denyUnprovisioned(
+              "Compte client non provisionné. Contacte le support pour lier ton compte."
+            );
+            return;
+          }
         }
+
+        const resolvedClientId = clientId && clientId !== user.uid ? clientId : user.uid;
 
         await ensureUserDoc({
           role: "client",
-          client_id: clientId,
+          client_id: resolvedClientId,
           email: user.email ?? mail,
           name: user.displayName ?? user.email ?? mail,
         });
@@ -163,9 +179,15 @@ export default function ClientLogin() {
       localStorage.setItem(STORAGE_KEY, email);
       setMode("complete");
       setInfo("Un lien de connexion vient de t’être envoyé par email.");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Impossible d'envoyer le lien. Vérifie l'email et réessaie.");
+      const msg =
+        err?.code === "auth/invalid-api-key"
+          ? "Clé API Firebase invalide. Vérifie la configuration."
+          : err?.code === "auth/operation-not-allowed"
+            ? "Méthode email/passwordless désactivée dans Firebase Auth."
+            : err?.message ?? "Impossible d'envoyer le lien. Vérifie l'email et réessaie.";
+      setError(`${msg}${err?.code ? ` (${err.code})` : ""}`);
     } finally {
       setProcessingLink(false);
       setLoading(false);
@@ -173,17 +195,11 @@ export default function ClientLogin() {
   };
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
-        <div className="row mb-2">
-          <div className="hero-content">
-            <p className="title">Espace installateur</p>
-            <p className="subtitle">Accède à ton tableau de bord avec un lien sécurisé.</p>
-          </div>
-          <div className="cta-row">
-            <ThemeToggle />
-            <span className="badge info">Magic Link</span>
-          </div>
+    <AuthLayout title="Espace installateur" subtitle="Accède à ton tableau de bord avec un lien sécurisé.">
+      <AuthCard>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span className="pill info">Magic Link</span>
+          <ThemeToggle />
         </div>
 
         {(processingLink || mode === "complete") && (
@@ -194,21 +210,24 @@ export default function ClientLogin() {
         )}
 
         <form className="stack" onSubmit={onSubmit}>
-          <div className="field">
-            <label>Adresse email professionnelle</label>
-            <input
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="vous@entreprise.com"
-              required
-              disabled={loading}
-            />
-          </div>
+          <AuthInput
+            label="Adresse email professionnelle"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="vous@entreprise.com"
+            required
+            disabled={loading}
+          />
 
           <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? (mode === "complete" ? "Connexion..." : "Envoi en cours...") : mode === "complete" ? "Finaliser la connexion" : "Recevoir le lien"}
+            {loading
+              ? mode === "complete"
+                ? "Connexion..."
+                : "Envoi en cours..."
+              : mode === "complete"
+                ? "Finaliser la connexion"
+                : "Recevoir le lien"}
           </button>
         </form>
 
@@ -218,7 +237,7 @@ export default function ClientLogin() {
 
         {info && <div className="alert success">{info}</div>}
         {error && <div className="alert error">{error}</div>}
-      </div>
-    </div>
+      </AuthCard>
+    </AuthLayout>
   );
 }
