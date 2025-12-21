@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { auth, db } from "../firebase";
@@ -187,9 +187,12 @@ export default function AdminDashboard() {
     if (!id) return;
     setSavingById((prev) => ({ ...prev, [id]: true }));
     setErrorById((prev) => ({ ...prev, [id]: null }));
-    const targetField = dossier?.status !== undefined ? "status" : dossier?.statut !== undefined ? "statut" : "status";
     try {
-      await updateDoc(doc(db, "dossiers", id), { [targetField]: nextStatus });
+      await updateDoc(doc(db, "dossiers", id), {
+        status: nextStatus,
+        statut: nextStatus,
+        updated_at: serverTimestamp(),
+      });
     } catch (err: any) {
       setErrorById((prev) => ({ ...prev, [id]: err?.message ?? "Sauvegarde impossible" }));
     } finally {
@@ -303,44 +306,45 @@ export default function AdminDashboard() {
                   <p className="stateText">Les dossiers apparaîtront ici dès qu’ils seront disponibles.</p>
                 </div>
               )}
-              {visibleRows.map((row) => (
-                <div key={row.id ?? row.installerId ?? row.title} className="row" style={{ alignItems: "flex-start" }}>
-                  <div className="stack">
-                    <h4 style={{ margin: 0 }}>{row.title ?? "Dossier"}</h4>
-                    <p className="section-sub">ID : {row.installerId ?? row.clientId ?? row.userId ?? "N/A"}</p>
-                  </div>
-                  <div className="row" style={{ gap: 8 }}>
-                    <span className="badge info">{row.status ?? row.statut ?? "Statut inconnu"}</span>
-                    <span className="badge">{row.installerId ?? row.id ?? ""}</span>
-                  </div>
-                  <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                    {(["EN_ATTENTE", "EN_COURS", "VALIDE", "REFUSE", "TERMINE"] as NormStatus[]).map((opt) => (
-                      <button
-                        key={opt}
-                        className={`statusBtn ${normalizeStatus(row) === opt ? "statusBtnActive" : ""}`}
-                        disabled={!!savingById[row.id ?? row.installerId ?? row.title]}
-                        onClick={() => handleStatusChange(row, opt)}
-                      >
-                        {opt === "EN_ATTENTE"
-                          ? "En attente"
-                          : opt === "EN_COURS"
-                          ? "En cours"
-                          : opt === "VALIDE"
-                          ? "Validé"
-                          : opt === "REFUSE"
-                          ? "Refusé"
-                          : "Terminé"}
-                        {savingById[row.id ?? row.installerId ?? row.title] && <span className="savingDot" />}
-                      </button>
-                    ))}
-                  </div>
-                  {errorById[row.id ?? row.installerId ?? row.title] && (
-                    <div className="rowError">
-                      {errorById[row.id ?? row.installerId ?? row.title]}
+              {visibleRows.map((row) => {
+                const rowId = row.id ?? row.installerId ?? row.clientId ?? row.userId ?? "(sans id)";
+                const rowTitle = row.title ?? "(sans titre)";
+                const rowStatus = row.status ?? row.statut ?? "(sans statut)";
+                return (
+                  <div key={rowId} className="row" style={{ alignItems: "flex-start" }}>
+                    <div className="stack">
+                      <h4 style={{ margin: 0 }}>{rowTitle}</h4>
+                      <p className="section-sub">ID : {rowId}</p>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <div className="row" style={{ gap: 8 }}>
+                      <span className="badge info">{rowStatus}</span>
+                      <span className="badge">{rowId}</span>
+                    </div>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      {(["EN_ATTENTE", "EN_COURS", "VALIDE", "REFUSE", "TERMINE"] as NormStatus[]).map((opt) => (
+                        <button
+                          key={opt}
+                          className={`statusBtn ${normalizeStatus(row) === opt ? "statusBtnActive" : ""}`}
+                          disabled={!!savingById[rowId]}
+                          onClick={() => handleStatusChange(row, opt)}
+                        >
+                          {opt === "EN_ATTENTE"
+                            ? "En attente"
+                            : opt === "EN_COURS"
+                            ? "En cours"
+                            : opt === "VALIDE"
+                            ? "Validé"
+                            : opt === "REFUSE"
+                            ? "Refusé"
+                            : "Terminé"}
+                          {savingById[rowId] && <span className="savingDot" />}
+                        </button>
+                      ))}
+                    </div>
+                    {errorById[rowId] && <div className="rowError">{errorById[rowId]}</div>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
