@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
-import { signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { auth, db } from "../firebase";
-
-const sampleRow = {
-  title: "Dossier test",
-  status: "EN COURS",
-  installerId: "8G2xjQ4WHCvawxGlselN2OCK7KT72",
-  lastUpdate: "18 déc., 15:04",
-};
+import { isAdminFromClaims } from "../lib/authz";
 
 type NormStatus = "EN_ATTENTE" | "EN_COURS" | "VALIDE" | "REFUSE" | "TERMINE" | "UNKNOWN";
 
@@ -70,26 +64,41 @@ export default function AdminDashboard() {
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [errorById, setErrorById] = useState<Record<string, string | null>>({});
   const userEmail = auth.currentUser?.email ?? "—";
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const DEBUG = import.meta.env.VITE_DEBUG_ADMIN === "true";
 
   useEffect(() => {
     localStorage.setItem("sf_theme_admin", theme);
   }, [theme]);
 
   useEffect(() => {
+    console.log("[ADMIN_DASHBOARD] firebase config", auth.app.options);
     localStorage.setItem("sf_filter_admin", filter);
   }, [filter]);
 
   useEffect(() => {
-    const colRef = collection(db, "dossiers");
+    const colPath = "dossiers";
+    const colRef = collection(db, colPath);
     const unsubscribe = onSnapshot(
       colRef,
       (snapshot) => {
+        if (DEBUG) {
+          console.log("[ADMIN_DASHBOARD] onSnapshot", colPath, "size", snapshot.size);
+          console.log(
+            "[ADMIN_DASHBOARD] dossiers ids",
+            snapshot.docs.map((d) => d.id),
+          );
+          if (snapshot.size > 0) {
+            console.log("[ADMIN_DASHBOARD] first doc data", snapshot.docs[0].data());
+          }
+        }
         const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         setDossiers(items);
         setLoading(false);
         setError(null);
       },
       (err) => {
+        if (DEBUG) console.error("[ADMIN_DASHBOARD] onSnapshot", colPath, "error", err?.code, err?.message);
         setError(err?.message ?? "Erreur de chargement");
         setLoading(false);
       },
@@ -97,14 +106,24 @@ export default function AdminDashboard() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (DEBUG) console.log("[ADMIN_DASHBOARD] dossiers state length", dossiers.length, dossiers.map((d) => d.id));
+  }, [dossiers]);
+
   const filteredRows = useMemo(() => {
-    const base = dossiers.length ? dossiers : [sampleRow];
-    if (filter === "ALL") return base;
-    return base.filter((d) => normalizeStatus(d) === filter);
+    if (filter === "ALL") return dossiers;
+    return dossiers.filter((d) => normalizeStatus(d) === filter);
   }, [dossiers, filter]);
 
+  useEffect(() => {
+    if (DEBUG) {
+      console.log("[ADMIN_DASHBOARD] filteredRows length", filteredRows.length, filteredRows.map((d) => d.id));
+      console.log("[ADMIN_DASHBOARD] filter", filter);
+    }
+  }, [filteredRows, filter]);
+
   const counts = useMemo(() => {
-    const base = dossiers.length ? dossiers : [sampleRow];
+    const base = dossiers;
     const tally = { ALL: base.length, EN_ATTENTE: 0, EN_COURS: 0, VALIDE: 0, REFUSE: 0, TERMINE: 0 } as Record<
       (typeof filterOptions)[number],
       number
@@ -119,6 +138,36 @@ export default function AdminDashboard() {
     return tally;
   }, []);
 
+  const visibleRows = useMemo(() => {
+    return isAdmin ? dossiers : filteredRows;
+  }, [dossiers, filteredRows, isAdmin]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        const token = await user.getIdTokenResult(true);
+        const wl = (import.meta.env.VITE_ADMIN_UIDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+        const adminFlag = isAdminFromClaims(token, user.uid ?? "", wl);
+        setIsAdmin(adminFlag);
+        if (DEBUG) {
+          console.log("[ADMIN_DASHBOARD] claims", token.claims, "isAdmin", adminFlag);
+        }
+      } catch (err) {
+        if (DEBUG) console.error("[ADMIN_DASHBOARD] token error", err);
+        setIsAdmin(false);
+      }
+    });
+    return () => unsub();
+  }, [DEBUG]);
+
+  useEffect(() => {
+    if (DEBUG) console.log("[ADMIN_DASHBOARD] visibleRows length", visibleRows.length, visibleRows.map((d) => d.id));
+  }, [visibleRows]);
+
   const handleToggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
@@ -127,7 +176,7 @@ export default function AdminDashboard() {
     setLogoutError(null);
     try {
       await signOut(auth);
-      window.location.assign("/admin/login");
+      console.warn("[DASHBOARD] redirect_to_login disabled (AdminRoute handles auth)");
     } catch (err: any) {
       setLogoutError(err?.message ?? "Déconnexion impossible.");
     }
@@ -208,18 +257,8 @@ export default function AdminDashboard() {
           </div>
 
           <div className="panel stack" style={{ padding: 16 }}>
-            <div className="row" style={{ alignItems: "flex-start" }}>
-              <div className="stack">
-                <h4 style={{ margin: 0 }}>{sampleRow.title}</h4>
-                <p className="section-sub">ID : mnhYCmWr7545evrEU7iv</p>
-              </div>
-              <div className="row" style={{ gap: 8 }}>
-                <span className="badge info">{sampleRow.status}</span>
-                <span className="badge">{sampleRow.installerId}</span>
-              </div>
-            </div>
             <div className="row" style={{ justifyContent: "space-between" }}>
-              <p className="section-sub">Dernière mise à jour {sampleRow.lastUpdate}</p>
+              <p className="section-sub">Dernière mise à jour en temps réel</p>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 {filterOptions.map((label) => (
                   <button
@@ -258,13 +297,13 @@ export default function AdminDashboard() {
                   <p className="stateText">{error}</p>
                 </div>
               )}
-              {!loading && !error && filteredRows.length === 0 && (
+              {!loading && !error && visibleRows.length === 0 && (
                 <div className="stateBox">
                   <p className="stateTitle">Aucun dossier</p>
                   <p className="stateText">Les dossiers apparaîtront ici dès qu’ils seront disponibles.</p>
                 </div>
               )}
-              {filteredRows.map((row) => (
+              {visibleRows.map((row) => (
                 <div key={row.id ?? row.installerId ?? row.title} className="row" style={{ alignItems: "flex-start" }}>
                   <div className="stack">
                     <h4 style={{ margin: 0 }}>{row.title ?? "Dossier"}</h4>
