@@ -1,90 +1,68 @@
-import { auth, db } from "../firebase";
-import * as shared from "@shared/firestore";
+import type { User } from "firebase/auth";
+import { db } from "../firebase";
+import { collection, doc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 
-export type {
-  Lead,
-  Client,
-  Dossier,
-  DossierDocument,
-  DossierTimelineEntry,
-  DossierNote,
-  DossierDocType,
-  DossierStepStatus,
-  User,
-  CreditTransaction,
-  FirestoreDate,
-} from "@shared/firestore";
+const DEBUG = import.meta.env.VITE_DEBUG_FIREBASE === "true";
 
-export const createLead = (data: Parameters<typeof shared.createLead>[1]) =>
-  shared.createLead(db, data);
-export const getLead = (id: string) => shared.getLead(db, id);
-export const getLeads = (filters?: Parameters<typeof shared.getLeads>[1]) =>
-  shared.getLeads(db, filters);
-export const updateLead = (id: string, data: Parameters<typeof shared.updateLead>[2]) =>
-  shared.updateLead(db, id, data);
-export const deleteLead = (id: string) => shared.deleteLead(db, id);
+/**
+ * Safe wrapper: n'explose jamais l'app si rules refusent.
+ */
+export async function ensureUserDocSafe(user: User | null) {
+  if (!user) return;
 
-export const createClient = (data: Parameters<typeof shared.createClient>[1]) =>
-  shared.createClient(db, data);
-export const getClient = (id: string) => shared.getClient(db, id);
-export const getClients = (filters?: Parameters<typeof shared.getClients>[1]) =>
-  shared.getClients(db, filters);
-export const updateClient = (id: string, data: Parameters<typeof shared.updateClient>[2]) =>
-  shared.updateClient(db, id, data);
+  const payload = {
+    uid: user.uid,
+    email: user.email ?? null,
+    name: user.displayName ?? null,
+    updated_at: serverTimestamp(),
+  };
 
-export const getNextDossierRef = () => shared.getNextDossierRef(db);
-export const createDossier = (data: Parameters<typeof shared.createDossier>[1]) =>
-  shared.createDossier(db, data);
-export const getDossier = (id: string) => shared.getDossier(db, id);
-export const getDossiersByClient = (clientId: string) =>
-  shared.getDossiersByClient(db, clientId);
-export const getDossiers = (filters?: Parameters<typeof shared.getDossiers>[1]) =>
-  shared.getDossiers(db, filters);
-export const updateDossier = (id: string, data: Parameters<typeof shared.updateDossier>[2]) =>
-  shared.updateDossier(db, id, data);
-export const addDossierDocument = (
-  dossierId: string,
-  document: Parameters<typeof shared.addDossierDocument>[2]
-) => shared.addDossierDocument(db, dossierId, document);
-export const addDossierTimelineEntry = (
-  dossierId: string,
-  entry: Parameters<typeof shared.addDossierTimelineEntry>[2]
-) => shared.addDossierTimelineEntry(db, dossierId, entry);
+  try {
+    await setDoc(
+      doc(db, "users", user.uid),
+      {
+        created_at: serverTimestamp(),
+        ...payload,
+      },
+      { merge: true },
+    );
+    if (DEBUG) console.info("[ensureUserDocSafe] ok", user.uid);
+    return "ok";
+  } catch (err: any) {
+    const code = err?.code || "";
+    if (code === "permission-denied") {
+      if (DEBUG) console.warn("[ensureUserDocSafe] denied", user.uid);
+      return "denied";
+    }
+    if (DEBUG) console.warn("[ensureUserDocSafe] error", code || err);
+    return "error";
+  }
+}
 
-export const createUser = (uid: string, data: Parameters<typeof shared.createUser>[2]) =>
-  shared.createUser(db, uid, data);
-export const getUser = (uid: string) => shared.getUser(db, uid);
-export const updateUser = (uid: string, data: Parameters<typeof shared.updateUser>[2]) =>
-  shared.updateUser(db, uid, data);
+/**
+ * Compat: certains écrans importent ensureUserDoc(...) depuis ../lib/firestore
+ * => on expose un alias.
+ */
+export async function ensureUserDoc(user: User | null) {
+  return ensureUserDocSafe(user);
+}
 
-export const addCredits = (clientId: string, amount: number, reason: string) =>
-  shared.addCredits(db, clientId, amount, reason);
-export const debitCredits = (
-  clientId: string,
-  amount: number,
-  reason: string,
-  dossierId?: string
-) => shared.debitCredits(db, clientId, amount, reason, dossierId);
-export const getCreditsHistory = (clientId: string) =>
-  shared.getCreditsHistory(db, clientId);
+/**
+ * Trouve un clientId à partir de l'email (si rules le permettent).
+ * Retourne null si introuvable ou permission-denied.
+ */
+export async function findClientIdByEmail(email: string): Promise<string | null> {
+  const e = (email || "").trim().toLowerCase();
+  if (!e) return null;
 
-export const convertLeadToClient = (
-  leadId: string,
-  pack: Parameters<typeof shared.convertLeadToClient>[2],
-  initialCredits: number,
-  installationData?: Parameters<typeof shared.convertLeadToClient>[4]
-) => shared.convertLeadToClient(db, leadId, pack, initialCredits, installationData);
-
-export const ensureUserDoc = (
-  data: Parameters<typeof shared.ensureUserDoc>[2],
-  uid?: string
-) => {
-  const userId = uid ?? auth.currentUser?.uid;
-  if (!userId) return Promise.resolve();
-  return shared.ensureUserDoc(db, userId, data).catch((err) => {
-    console.warn("[ensureUserDoc] write refused", err);
-  });
-};
-
-export const findClientIdByEmail = (email: string | null | undefined) =>
-  shared.findClientIdByEmail(db, email);
+  try {
+    const col = collection(db, "clients");
+    const q = query(col, where("email", "==", e), limit(1));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return snap.docs[0].id;
+  } catch (err: any) {
+    if (DEBUG) console.warn("[findClientIdByEmail] error", err?.code || err);
+    return null;
+  }
+}

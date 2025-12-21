@@ -8,10 +8,11 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { ThemeToggle } from "../theme";
-import { ensureUserDoc } from "../lib/firestore";
+import { ensureUserDocSafe } from "../lib/firestore";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthCard from "../components/auth/AuthCard";
 import AuthInput from "../components/auth/AuthInput";
+import FirebaseDebugPanel from "../components/debug/FirebaseDebugPanel";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -43,12 +44,8 @@ export default function AdminLogin() {
         const isAdmin =
           Boolean((token.claims as any).admin) || whitelist.includes(user.uid);
         if (isAdmin) {
-          await ensureUserDoc({
-            role: "admin",
-            email: user.email ?? email,
-            name: user.displayName ?? user.email ?? email,
-          });
-          navigate("/admin/dashboard", { replace: true });
+          await ensureUserDocSafe(user);
+navigate("/admin/dashboard", { replace: true });
         } else {
           await signOut(auth);
         }
@@ -86,12 +83,8 @@ export default function AdminLogin() {
         setError("Accès refusé : vous n'êtes pas autorisé.");
         return;
       }
-      await ensureUserDoc({
-        role: "admin",
-        email: cred.user.email ?? email,
-        name: cred.user.displayName ?? cred.user.email ?? email,
-      });
-      setInfo("Connexion réussie, redirection...");
+      await ensureUserDocSafe(user);
+setInfo("Connexion réussie, redirection...");
       navigate("/admin/dashboard", { replace: true });
     } catch (e: any) {
       console.error(e);
@@ -159,6 +152,7 @@ export default function AdminLogin() {
 
         {error && <div className="alert error">{error}</div>}
         {info && <div className="alert success">{info}</div>}
+        <FirebaseDebugPanel />
       </AuthCard>
     </AuthLayout>
   );

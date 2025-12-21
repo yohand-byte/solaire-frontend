@@ -9,10 +9,11 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { ThemeToggle } from "../theme";
-import { ensureUserDoc, findClientIdByEmail } from "../lib/firestore";
+import { ensureUserDocSafe, findClientIdByEmail } from "../lib/firestore";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthCard from "../components/auth/AuthCard";
 import AuthInput from "../components/auth/AuthInput";
+import FirebaseDebugPanel from "../components/debug/FirebaseDebugPanel";
 
 const STORAGE_KEY = "sf_client_email_for_signin";
 const DEV_BYPASS_PROVISION = import.meta.env?.VITE_BYPASS_CLIENT_PROVISION === "true";
@@ -27,7 +28,7 @@ export default function ClientLogin() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"send" | "complete">("send");
 
-  const redirectUrl = useMemo(() => `${window.location.origin}/client/login`, []);
+  const redirectUrl = useMemo(() => "https://solaire-frontend.web.app/client/login", []);
 
   const denyUnprovisioned = useCallback(
     async (msg: string) => {
@@ -66,14 +67,8 @@ export default function ClientLogin() {
 
         const resolvedClientId = clientId && clientId !== user.uid ? clientId : user.uid;
 
-        await ensureUserDoc({
-          role: "client",
-          client_id: resolvedClientId,
-          email: user.email ?? email,
-          name: user.displayName ?? user.email ?? email,
-        });
-
-        navigate("/client/dashboard", { replace: true });
+        await ensureUserDocSafe(user);
+navigate("/client/dashboard", { replace: true });
       }
     });
 
@@ -121,14 +116,8 @@ export default function ClientLogin() {
 
         const resolvedClientId = clientId && clientId !== user.uid ? clientId : user.uid;
 
-        await ensureUserDoc({
-          role: "client",
-          client_id: resolvedClientId,
-          email: user.email ?? mail,
-          name: user.displayName ?? user.email ?? mail,
-        });
-
-        localStorage.removeItem(STORAGE_KEY);
+        await ensureUserDocSafe(user);
+localStorage.removeItem(STORAGE_KEY);
         navigate("/client/dashboard", { replace: true });
       } catch (err) {
         console.error(err);
@@ -237,6 +226,7 @@ export default function ClientLogin() {
 
         {info && <div className="alert success">{info}</div>}
         {error && <div className="alert error">{error}</div>}
+        <FirebaseDebugPanel />
       </AuthCard>
     </AuthLayout>
   );

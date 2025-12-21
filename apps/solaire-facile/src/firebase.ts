@@ -24,6 +24,8 @@ if (DEBUG || import.meta.env.DEV) {
   const prefix = apiKey.slice(0, 6);
   // eslint-disable-next-line no-console
   console.info("[firebase:init]", {
+    env: import.meta.env.DEV ? "dev" : "prod",
+    origin: typeof window !== "undefined" ? window.location.origin : "n/a",
     authDomain: firebaseConfig.authDomain,
     projectId: firebaseConfig.projectId,
     apiKeyPrefix: prefix,
