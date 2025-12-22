@@ -1,10 +1,323 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+import { defineSecret } from "firebase-functions/params";
+import { setGlobalOptions } from "firebase-functions/v2";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
+import * as logger from "firebase-functions/logger";
+import { initializeApp } from "firebase-admin/app";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
+import { OpenAI } from "openai";
+import {
+  ACTIONS_RESPONSE_TEMPLATE,
+  ACTIONS_SYSTEM_PROMPT,
+  SUMMARY_RESPONSE_TEMPLATE,
+  SUMMARY_SYSTEM_PROMPT,
+} from "./ai/prompts.js";
+import {
+  ActionsResponse,
+  ActionStatusUpdate,
+  NextActionsInput,
+  SummarizeInput,
+  actionsResponseSchema,
+  nextActionsInputSchema,
+  summarizeInputSchema,
+  summaryResponseSchema,
+} from "./ai/schemas.js";
+import {
+  DossierContext,
+  RequestIdentity,
+  buildActionsPrompt,
+  buildSummaryPrompt,
+  hashText,
+  loadDossierContext,
+  logAiEvent,
+} from "./ai/context.js";
+import { getRecentChunks, indexFileForRag } from "./ai/rag.js";
 
-/* No functions deployed in Spark plan */
+setGlobalOptions({ region: "europe-west1" });
+
+initializeApp();
+const db = getFirestore();
+const storage = getStorage();
+const openAiKey = defineSecret("OPENAI_API_KEY");
+
+const isFeatureEnabled = () => process.env.FEATURE_AI_ASSISTANT === "true";
+const createOpenAI = () => new OpenAI({ apiKey: openAiKey.value() });
+
+const requireIdentity = (auth: any): RequestIdentity => {
+  if (!auth) throw new HttpsError("unauthenticated", "Authentification requise.");
+  return { uid: auth.uid, claims: auth.token as Record<string, any> };
+};
+
+const withRag = async (context: DossierContext) => {
+  context.ragPassages = await getRecentChunks(db, context.dossierId, 5);
+  return context;
+};
+
+const saveActionsForDossier = async (
+  actions: ActionsResponse["actions"],
+  meta: {
+    dossierId: string;
+    clientId: string | null;
+    installerId: string | null;
+    createdBy: string;
+    summaryId?: string;
+    source: string;
+  }
+) => {
+  if (!actions?.length) return [] as string[];
+  const ids: string[] = [];
+  for (const action of actions) {
+    const ref = db.collection("ai_actions").doc();
+    await ref.set({
+      dossierId: meta.dossierId,
+      clientId: meta.clientId ?? null,
+      installerId: meta.installerId ?? null,
+      title: action.title,
+      description: action.description,
+      dueAt: action.dueAt,
+      priority: action.priority,
+      status: action.status ?? "pending",
+      createdAt: FieldValue.serverTimestamp(),
+      createdBy: meta.createdBy,
+      approvedAt: null,
+      approvedBy: null,
+      sourceSummaryId: meta.summaryId ?? null,
+      source: meta.source,
+    });
+    ids.push(ref.id);
+  }
+  return ids;
+};
+
+const parseJson = <T>(raw: string | null | undefined, schema: (input: unknown) => T): T => {
+  if (!raw) throw new HttpsError("internal", "Réponse IA vide");
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: any) {
+    throw new HttpsError("internal", `Réponse IA invalide: ${err.message || err}`);
+  }
+  return schema(parsed);
+};
+
+const generateSummary = async (
+  payload: SummarizeInput,
+  identity: RequestIdentity,
+  source: "onDemand" | "refresh"
+) => {
+  const ctx = await withRag(await loadDossierContext(db, payload.dossierId, identity));
+  const prompt = buildSummaryPrompt(ctx, SUMMARY_RESPONSE_TEMPLATE);
+  const openai = createOpenAI();
+  const started = Date.now();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SUMMARY_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const content = completion.choices[0]?.message?.content?.trim() || null;
+  const parsed = parseJson(content, (input) => summaryResponseSchema.parse(input));
+
+  const summaryRef = db.collection("ai_summaries").doc();
+  await summaryRef.set({
+    dossierId: ctx.dossierId,
+    clientId: ctx.metadata.clientId ?? null,
+    installerId: ctx.metadata.installerId ?? null,
+    summary: parsed.summary,
+    confidence: parsed.confidence,
+    risks: parsed.risks,
+    actions: parsed.actions,
+    createdAt: FieldValue.serverTimestamp(),
+    createdBy: identity.uid,
+    source,
+    promptVersion: "v1",
+    tool: "aiSummarizeDossier",
+  });
+
+  const actionIds = await saveActionsForDossier(parsed.actions, {
+    dossierId: ctx.dossierId,
+    clientId: ctx.metadata.clientId,
+    installerId: ctx.metadata.installerId,
+    createdBy: identity.uid,
+    summaryId: summaryRef.id,
+    source: "aiSummarizeDossier",
+  });
+
+  await logAiEvent(db, {
+    tool: "aiSummarizeDossier",
+    promptHash: hashText(prompt),
+    latencyMs: Date.now() - started,
+    inputTokens: completion.usage?.prompt_tokens ?? null,
+    outputTokens: completion.usage?.completion_tokens ?? null,
+    metadata: { dossierId: ctx.dossierId, summaryId: summaryRef.id, actions: actionIds.length },
+  });
+
+  return { summaryId: summaryRef.id, actionIds };
+};
+
+const generateNextActions = async (payload: NextActionsInput, identity: RequestIdentity) => {
+  const ctx = await withRag(await loadDossierContext(db, payload.dossierId, identity));
+  const prompt = buildActionsPrompt(ctx, ACTIONS_RESPONSE_TEMPLATE);
+  const openai = createOpenAI();
+  const started = Date.now();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: ACTIONS_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+  });
+  const content = completion.choices[0]?.message?.content?.trim() || null;
+  const parsed = parseJson(content, (input) => actionsResponseSchema.parse(input));
+  const actionIds = await saveActionsForDossier(parsed.actions, {
+    dossierId: ctx.dossierId,
+    clientId: ctx.metadata.clientId,
+    installerId: ctx.metadata.installerId,
+    createdBy: identity.uid,
+    source: "aiNextBestActions",
+  });
+
+  await logAiEvent(db, {
+    tool: "aiNextBestActions",
+    promptHash: hashText(prompt),
+    latencyMs: Date.now() - started,
+    inputTokens: completion.usage?.prompt_tokens ?? null,
+    outputTokens: completion.usage?.completion_tokens ?? null,
+    metadata: { dossierId: ctx.dossierId, actions: actionIds.length },
+  });
+
+  return { actionIds };
+};
+
+const updateActionStatus = async (payload: ActionStatusUpdate, identity: RequestIdentity) => {
+  const ref = db.collection("ai_actions").doc(payload.actionId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Action introuvable");
+  const data = snap.data() || {};
+  const dossierId = (data.dossierId as string) || "";
+  if (!dossierId) throw new HttpsError("failed-precondition", "Action sans dossier associé");
+  await loadDossierContext(db, dossierId, identity); // reuse authorisation
+  await ref.set(
+    {
+      status: payload.status,
+      approvedAt: FieldValue.serverTimestamp(),
+      approvedBy: identity.uid,
+    },
+    { merge: true }
+  );
+  await logAiEvent(db, {
+    tool: "aiNextBestActions",
+    promptHash: null,
+    metadata: { dossierId, actionId: payload.actionId, status: payload.status },
+  });
+  return { dossierId };
+};
+
+export const aiSummarizeDossier = onCall(
+  { secrets: [openAiKey], timeoutSeconds: 120, memory: "1GiB" },
+  async (request) => {
+    if (!isFeatureEnabled()) return { ok: false, disabled: true };
+    const identity = requireIdentity(request.auth);
+    const payload = summarizeInputSchema.parse(request.data || {});
+    const result = await generateSummary(payload, identity, "onDemand");
+    return { ok: true, ...result };
+  }
+);
+
+export const aiNextBestActions = onCall(
+  { secrets: [openAiKey], timeoutSeconds: 90, memory: "1GiB" },
+  async (request) => {
+    if (!isFeatureEnabled()) return { ok: false, disabled: true };
+    const identity = requireIdentity(request.auth);
+    const payload = nextActionsInputSchema.parse(request.data || {});
+    if (payload.actionUpdate) {
+      const { dossierId } = await updateActionStatus(payload.actionUpdate, identity);
+      return { ok: true, updated: payload.actionUpdate.actionId, dossierId };
+    }
+    const result = await generateNextActions(payload, identity);
+    return { ok: true, ...result };
+  }
+);
+
+export const aiRefreshSummaries = onSchedule(
+  {
+    schedule: "0 5 * * *",
+    timeZone: "Europe/Paris",
+    secrets: [openAiKey],
+    retryCount: 0,
+  },
+  async () => {
+    if (!isFeatureEnabled()) {
+      logger.info("[aiRefreshSummaries] flag OFF");
+      return;
+    }
+    const identity: RequestIdentity = { uid: "system", claims: { role: "admin", admin: true } };
+    let snap = await db.collection("dossiers").limit(10).get();
+    if (snap.empty) {
+      snap = await db.collection("files").limit(10).get();
+    }
+    if (snap.empty) {
+      logger.info("[aiRefreshSummaries] aucun dossier trouvé");
+      return;
+    }
+    for (const doc of snap.docs) {
+      try {
+        const lastSummarySnap = await db
+          .collection("ai_summaries")
+          .where("dossierId", "==", doc.id)
+          .orderBy("createdAt", "desc")
+          .limit(1)
+          .get();
+        const last = lastSummarySnap.docs[0]?.get("createdAt");
+        if (last && last.toDate && last.toDate() > new Date(Date.now() - 12 * 60 * 60 * 1000)) {
+          logger.debug(`[aiRefreshSummaries] skip dossier ${doc.id} (recent summary)`);
+          continue;
+        }
+        await generateSummary({ dossierId: doc.id }, identity, "refresh");
+      } catch (err) {
+        logger.error("[aiRefreshSummaries] dossier", doc.id, err);
+      }
+    }
+  }
+);
+
+export const indexDossierDoc = onObjectFinalized(
+  { secrets: [openAiKey], memory: "1GiB" },
+  async (event) => {
+    if (!isFeatureEnabled()) {
+      logger.info("[indexDossierDoc] flag OFF");
+      return;
+    }
+    const filePath = event.data.name;
+    if (!filePath) {
+      logger.warn("[indexDossierDoc] missing object name");
+      return;
+    }
+    const dossierId = (event.data.metadata?.dossierId as string) || null;
+    if (!dossierId) {
+      logger.warn("[indexDossierDoc] dossierId manquant, skip", filePath);
+      return;
+    }
+    const openai = createOpenAI();
+    await indexFileForRag({
+      db,
+      storage,
+      openai,
+      filePath,
+      bucketName: event.data.bucket,
+      dossierId,
+      clientId: (event.data.metadata?.clientId as string) || null,
+      installerId: (event.data.metadata?.installerId as string) || null,
+      contentType: event.data.contentType || null,
+      sizeBytes: event.data.size || null,
+    });
+  }
+);
