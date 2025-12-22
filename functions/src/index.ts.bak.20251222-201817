@@ -2,10 +2,12 @@ import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-// STORAGE DISABLED: import { onObjectFinalized } from "firebase-functions/v2/storage";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
 import * as logger from "firebase-functions/logger";
 import { initializeApp } from "firebase-admin/app";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";import { OpenAI } from "openai";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
+import { OpenAI } from "openai";
 import {
   ACTIONS_RESPONSE_TEMPLATE,
   ACTIONS_SYSTEM_PROMPT,
@@ -31,13 +33,13 @@ import {
   loadDossierContext,
   logAiEvent,
 } from "./ai/context.js";
-import { getRecentChunks } from "./ai/rag.js";
+import { getRecentChunks, indexFileForRag } from "./ai/rag.js";
 
 setGlobalOptions({ region: "europe-west1" });
 
 initializeApp();
 const db = getFirestore();
-// const storage = getStorage(); // STORAGE DISABLED
+const storage = getStorage();
 const openAiKey = defineSecret("OPENAI_API_KEY");
 
 const isFeatureEnabled = () => process.env.FEATURE_AI_ASSISTANT === "true";
@@ -287,3 +289,35 @@ export const aiRefreshSummaries = onSchedule(
   }
 );
 
+export const indexDossierDoc = onObjectFinalized(
+  { secrets: [openAiKey], memory: "1GiB" },
+  async (event) => {
+    if (!isFeatureEnabled()) {
+      logger.info("[indexDossierDoc] flag OFF");
+      return;
+    }
+    const filePath = event.data.name;
+    if (!filePath) {
+      logger.warn("[indexDossierDoc] missing object name");
+      return;
+    }
+    const dossierId = (event.data.metadata?.dossierId as string) || null;
+    if (!dossierId) {
+      logger.warn("[indexDossierDoc] dossierId manquant, skip", filePath);
+      return;
+    }
+    const openai = createOpenAI();
+    await indexFileForRag({
+      db,
+      storage,
+      openai,
+      filePath,
+      bucketName: event.data.bucket,
+      dossierId,
+      clientId: (event.data.metadata?.clientId as string) || null,
+      installerId: (event.data.metadata?.installerId as string) || null,
+      contentType: event.data.contentType || null,
+      sizeBytes: event.data.size || null,
+    });
+  }
+);

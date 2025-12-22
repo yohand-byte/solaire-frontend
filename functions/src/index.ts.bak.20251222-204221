@@ -1,0 +1,90 @@
+import { defineSecret } from "firebase-functions/params";
+import { setGlobalOptions } from "firebase-functions/v2";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+// STORAGE DISABLED: removed storage trigger block
+
+export const aiNextBestActions = onCall(
+  { secrets: [openAiKey], timeoutSeconds: 90, memory: "1GiB" },
+  async (request) => {
+    if (!isFeatureEnabled()) return { ok: false, disabled: true };
+    const identity = requireIdentity(request.auth);
+    const payload = nextActionsInputSchema.parse(request.data || {});
+    if (payload.actionUpdate) {
+      const { dossierId } = await updateActionStatus(payload.actionUpdate, identity);
+      return { ok: true, updated: payload.actionUpdate.actionId, dossierId };
+    }
+    const result = await generateNextActions(payload, identity);
+    return { ok: true, ...result };
+  }
+);
+
+export const aiRefreshSummaries = onSchedule(
+  {
+    schedule: "0 5 * * *",
+    timeZone: "Europe/Paris",
+    secrets: [openAiKey],
+    retryCount: 0,
+  },
+  async () => {
+    if (!isFeatureEnabled()) {
+      logger.info("[aiRefreshSummaries] flag OFF");
+      return;
+    }
+    const identity: RequestIdentity = { uid: "system", claims: { role: "admin", admin: true } };
+    let snap = await db.collection("dossiers").limit(10).get();
+    if (snap.empty) {
+      snap = await db.collection("files").limit(10).get();
+    }
+    if (snap.empty) {
+      logger.info("[aiRefreshSummaries] aucun dossier trouvé");
+      return;
+    }
+    for (const doc of snap.docs) {
+      try {
+        const lastSummarySnap = await db
+          .collection("ai_summaries")
+          .where("dossierId", "==", doc.id)
+          .orderBy("createdAt", "desc")
+          .limit(1)
+          .get();
+        const last = lastSummarySnap.docs[0]?.get("createdAt");
+        if (last && last.toDate && last.toDate() > new Date(Date.now() - 12 * 60 * 60 * 1000)) {
+          logger.debug(`[aiRefreshSummaries] skip dossier ${doc.id} (recent summary)`);
+          continue;
+        }
+        await generateSummary({ dossierId: doc.id }, identity, "refresh");
+      } catch (err) {
+        logger.error("[aiRefreshSummaries] dossier", doc.id, err);
+      }
+    }
+  }
+);
+
+      return;
+    }
+    const filePath = event.data.name;
+    if (!filePath) {
+      logger.warn("[indexDossierDoc] missing object name");
+      return;
+    }
+    const dossierId = (event.data.metadata?.dossierId as string) || null;
+    if (!dossierId) {
+      logger.warn("[indexDossierDoc] dossierId manquant, skip", filePath);
+      return;
+    }
+    const openai = createOpenAI();
+    await indexFileForRag({
+      db,
+      storage,
+      openai,
+      filePath,
+      bucketName: event.data.bucket,
+      dossierId,
+      clientId: (event.data.metadata?.clientId as string) || null,
+      installerId: (event.data.metadata?.installerId as string) || null,
+      contentType: event.data.contentType || null,
+      sizeBytes: event.data.size || null,
+    });
+  }
+);

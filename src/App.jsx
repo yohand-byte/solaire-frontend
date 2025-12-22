@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { apiFetch, useProxy } from "./lib/api";
 
 const API_BASE = 'https://solaire-api-828508661560.europe-west1.run.app';
 const API_TOKEN = 'saftoken-123';
@@ -730,18 +731,23 @@ export default function App() {
     setCreating(true);
     try {
       const selectedPack = PACK_OPTIONS.find((p) => p.code === form.packCode) || PACK_OPTIONS[0];
-      const res = await fetch(`${API_BASE}/leads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
-        body: JSON.stringify({
-          ...form,
-          packCode: selectedPack.code,
-          packLabel: selectedPack.label,
-          packPrice: selectedPack.code === "FLEX" ? undefined : selectedPack.price,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error || res.statusText);
+      const payload = {
+        ...form,
+        packCode: selectedPack.code,
+        packLabel: selectedPack.label,
+        packPrice: selectedPack.code === "FLEX" ? undefined : selectedPack.price,
+      };
+      if (useProxy) {
+        await apiFetch("/api/leads", { method: "POST", body: payload });
+      } else {
+        const res = await fetch(`${API_BASE}/leads`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+          body: JSON.stringify(payload),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body?.error || res.statusText);
+      }
       setForm({ name: "", company: "", email: "", phone: "", volume: "", packCode: "ESSENTIEL", packLabel: "Essentiel", packPrice: 169, flexItems: [], status: "nouveau", source: "landing" });
       setReloadKey((k) => k + 1);
     } catch (err) {

@@ -2,123 +2,59 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && request.auth.token.role == 'admin'; }
+    function isClient() { return isSignedIn() && request.auth.token.role == 'client'; }
+    function installerId() { return request.auth.token.installerId; }
 
-    function userDocPath() {
-      return /databases/$(database)/documents/users/$(request.auth.uid);
-    }
-
-    function isAdminByClaim() {
-      return isSignedIn() && request.auth.token.admin == true;
-    }
-
-    function isAdminAllowlistUid() {
-      return isSignedIn() && request.auth.uid in [
-        "8G2xjO4WHCVavwXGlseNZOC7KT72",
-      ];
-    }
-
-    function isAdmin() {
-      return isAdminByClaim()
-        || isAdminAllowlistUid()
-        || (isSignedIn() && exists(userDocPath()) && get(userDocPath()).data.role == "admin");
-    }
-
-    function isOwnerClient(clientId) {
-      return isSignedIn()
-        && exists(userDocPath())
-        && get(userDocPath()).data.client_id == clientId;
-    }
-
-    function clientDossierUpdateAllowed() {
-      return isOwnerClient(resource.data.client_id)
-        && request.resource.data.client_id == resource.data.client_id
-        && request.resource.data.diff(resource.data).changedKeys()
-          .hasOnly(["documents", "notes", "updated_at"]);
-    }
-
-    function canAccessAiDossier(dossierId, clientId, installerId) {
+    // Generic helper for ai_* docs: authorize via clientId (uid) OR installerId, otherwise admin only.
+    function canReadAiDoc(data) {
       return isAdmin()
-        || (clientId != null && isOwnerClient(clientId))
-        || (installerId != null && isSignedIn() && request.auth.token.installerId == installerId)
-        || (
-          dossierId != null
-            && isSignedIn()
-            && let dossierPath = /databases/$(database)/documents/dossiers/$(dossierId);
-               exists(dossierPath)
-               && (
-                 (get(dossierPath).data.client_id != null && isOwnerClient(get(dossierPath).data.client_id))
-                 || (get(dossierPath).data.installerId != null && request.auth.token.installerId == get(dossierPath).data.installerId)
-               )
-        );
+        || (isClient()
+            && (
+              (data.clientId != null && data.clientId == request.auth.uid)
+              || (data.installerId != null && data.installerId == installerId())
+            )
+          );
     }
 
-    match /leads/{leadId} {
-      allow read, write: if isAdmin();
+    // ---- Existing CRM rules (keep conservative, non-destructive) ----
+
+    match /files/{id} {
+      allow read: if isAdmin() || (isClient() && resource.data.installerId == installerId());
+      allow create, update, delete: if isAdmin();
     }
 
-    match /clients/{clientId} {
-      allow read: if isAdmin()
-        || isOwnerClient(clientId)
-        || (isSignedIn() && resource.data.email == request.auth.token.email);
-      allow write: if isAdmin();
+    match /clients/{id} {
+      allow read: if isAdmin() || (isClient() && request.auth.uid == id);
+      allow create, update, delete: if isAdmin();
     }
 
-    match /dossiers/{dossierId} {
-      allow read: if isAdmin() || isOwnerClient(resource.data.client_id);
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || clientDossierUpdateAllowed();
+    match /leads/{id} {
+      allow read, create, update, delete: if isAdmin();
     }
 
-    match /users/{uid} {
-      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
-      allow create: if isSignedIn()
-        && request.auth.uid == uid
-        && (
-          (request.resource.data.role == "client")
-          || (request.resource.data.role == "admin" && (isAdminByClaim() || isAdminAllowlistUid()))
-        );
-      allow update: if isAdmin()
-        || (isSignedIn()
-          && request.auth.uid == uid
-          && request.resource.data.role == resource.data.role
-          && request.resource.data.client_id == resource.data.client_id
-          && request.resource.data.diff(resource.data).changedKeys()
-            .hasOnly(["name", "email", "last_login", "updated_at"]));
-      allow delete: if isAdmin();
+    match /counters/{id} {
+      allow read, create, update, delete: if isAdmin();
     }
 
-    match /credits_transactions/{txId} {
-      allow read: if isAdmin() || isOwnerClient(resource.data.client_id);
-      allow write: if isAdmin();
+    // ---- AI collections ----
+    match /ai_summaries/{id} {
+      allow read: if canReadAiDoc(resource.data);
+      allow create, update, delete: if isAdmin();
     }
 
-    match /counters/{counterId} {
-      allow read, write: if isAdmin();
+    match /ai_actions/{id} {
+      allow read: if canReadAiDoc(resource.data);
+      allow create, update, delete: if isAdmin();
     }
 
-    match /ai_summaries/{summaryId} {
-      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
-      allow write: if false;
+    match /ai_chunks/{id} {
+      allow read: if canReadAiDoc(resource.data);
+      allow create, update, delete: if isAdmin();
     }
 
-    match /ai_actions/{actionId} {
-      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
-      allow write: if false;
-    }
-
-    match /ai_chunks/{chunkId} {
-      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
-      allow write: if false;
-    }
-
-    match /ai_logs/{logId} {
-      allow read, write: if false;
-    }
-
-    match /{document=**} {
+    match /ai_logs/{id} {
       allow read, write: if false;
     }
   }

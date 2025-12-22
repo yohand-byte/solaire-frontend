@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function isAdminByClaim() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function isAdminAllowlistUid() {
+      return isSignedIn() && request.auth.uid in [
+        "8G2xjO4WHCVavwXGlseNZOC7KT72",
+      ];
+    }
+
+    function isAdmin() {
+      return isAdminByClaim()
+        || isAdminAllowlistUid()
+        || (isSignedIn() && exists(userDocPath()) && get(userDocPath()).data.role == "admin");
+    }
+
+    function isOwnerClient(clientId) {
+      return isSignedIn()
+        && exists(userDocPath())
+        && get(userDocPath()).data.client_id == clientId;
+    }
+
+    function clientDossierUpdateAllowed() {
+      return isOwnerClient(resource.data.client_id)
+        && request.resource.data.client_id == resource.data.client_id
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(["documents", "notes", "updated_at"]);
+    }
+
+    function canAccessAiDossier(dossierId, clientId, installerId) {
+      return isAdmin()
+        || (clientId != null && isOwnerClient(clientId))
+        || (installerId != null && isSignedIn() && request.auth.token.installerId == installerId)
+        || (
+          dossierId != null
+            && isSignedIn()
+            && let dossierPath = /databases/$(database)/documents/dossiers/$(dossierId);
+               exists(dossierPath)
+               && (
+                 (get(dossierPath).data.client_id != null && isOwnerClient(get(dossierPath).data.client_id))
+                 || (get(dossierPath).data.installerId != null && request.auth.token.installerId == get(dossierPath).data.installerId)
+               )
+        );
+    }
+
+    match /leads/{leadId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow read: if isAdmin()
+        || isOwnerClient(clientId)
+        || (isSignedIn() && resource.data.email == request.auth.token.email);
+      allow write: if isAdmin();
+    }
+
+    match /dossiers/{dossierId} {
+      allow read: if isAdmin() || isOwnerClient(resource.data.client_id);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || clientDossierUpdateAllowed();
+    }
+
+    match /users/{uid} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && (
+          (request.resource.data.role == "client")
+          || (request.resource.data.role == "admin" && (isAdminByClaim() || isAdminAllowlistUid()))
+        );
+      allow update: if isAdmin()
+        || (isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.client_id == resource.data.client_id
+          && request.resource.data.diff(resource.data).changedKeys()
+            .hasOnly(["name", "email", "last_login", "updated_at"]));
+      allow delete: if isAdmin();
+    }
+
+    match /credits_transactions/{txId} {
+      allow read: if isAdmin() || isOwnerClient(resource.data.client_id);
+      allow write: if isAdmin();
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /ai_summaries/{summaryId} {
+      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
+      allow write: if false;
+    }
+
+    match /ai_actions/{actionId} {
+      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
+      allow write: if false;
+    }
+
+    match /ai_chunks/{chunkId} {
+      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
+      allow write: if false;
+    }
+
+    match /ai_logs/{logId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
