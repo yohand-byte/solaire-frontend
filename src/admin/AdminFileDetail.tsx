@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDocument } from "../hooks/useDocument";
+import AssistantPanel from "../components/ai/AssistantPanel";
+import { FEATURE_AI_ASSISTANT } from "../lib/flags";
 
 const toDate = (value: any) => {
   if (!value) return null;
@@ -122,6 +124,8 @@ export default function AdminFileDetail() {
             )}
           </div>
         </div>
+
+        {FEATURE_AI_ASSISTANT && <AssistantPanel dossierId={id || ""} />}
       </div>
 
       <div className="grid" style={{ marginTop: 24, gap: 16 }}>
