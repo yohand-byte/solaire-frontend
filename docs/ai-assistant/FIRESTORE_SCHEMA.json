@@ -1,0 +1,80 @@
+{
+  "ai_summaries": {
+    "description": "Synthèses IA par dossier (une entrée par génération).",
+    "fields": {
+      "dossierId": "string (référence vers dossiers/{id})",
+      "clientId": "string|null (copie du client associé si dispo)",
+      "installerId": "string|null (copie installerId si dispo)",
+      "summary": "string (résumé court)",
+      "confidence": "number 0-1",
+      "risks": [
+        {
+          "label": "string",
+          "evidence": "string",
+          "severity": "low|medium|high"
+        }
+      ],
+      "actions": [
+        {
+          "title": "string",
+          "description": "string",
+          "dueAt": "string (YYYY-MM-DD)",
+          "priority": "low|medium|high",
+          "status": "pending|approved|rejected"
+        }
+      ],
+      "createdAt": "Timestamp",
+      "createdBy": "string (uid ou 'system')",
+      "source": "string ('onDemand'|'refresh')",
+      "promptVersion": "string",
+      "tool": "string (ex: 'aiSummarizeDossier')"
+    }
+  },
+  "ai_actions": {
+    "description": "Actions recommandées par l’IA (status piloté depuis Functions).",
+    "fields": {
+      "dossierId": "string",
+      "clientId": "string|null",
+      "installerId": "string|null",
+      "title": "string",
+      "description": "string",
+      "dueAt": "string (YYYY-MM-DD)",
+      "priority": "low|medium|high",
+      "status": "pending|approved|rejected|done",
+      "createdAt": "Timestamp",
+      "createdBy": "string",
+      "approvedAt": "Timestamp|null",
+      "approvedBy": "string|null",
+      "sourceSummaryId": "string|null (ai_summaries docId)",
+      "source": "string (aiSummarizeDossier|aiNextBestActions)",
+      "acknowledgedAt": "Timestamp|null"
+    }
+  },
+  "ai_chunks": {
+    "description": "Passages indexés pour RAG (embeddings).",
+    "fields": {
+      "dossierId": "string",
+      "clientId": "string|null",
+      "installerId": "string|null",
+      "sourcePath": "string (storage path ou firestore doc path)",
+      "mimeType": "string",
+      "content": "string (texte brut tronqué)",
+      "embedding": "array[number] (OpenAI embedding, taille modèle)",
+      "tokenCount": "number",
+      "createdAt": "Timestamp",
+      "createdBy": "string ('indexDossierDoc')"
+    }
+  },
+  "ai_logs": {
+    "description": "Journaux anonymisés (pas de PII).",
+    "fields": {
+      "tool": "string (aiSummarizeDossier|aiNextBestActions|aiRefreshSummaries|indexDossierDoc)",
+      "promptHash": "string (sha256 hex du prompt complet)",
+      "latencyMs": "number",
+      "inputTokens": "number|null",
+      "outputTokens": "number|null",
+      "createdAt": "Timestamp",
+      "metadata": "object (lightweight, ex: { dossierId, sourcePath })"
+    }
+  }
+}

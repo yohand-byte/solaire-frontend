@@ -39,6 +39,22 @@ service cloud.firestore {
           .hasOnly(["documents", "notes", "updated_at"]);
     }
 
+    function canAccessAiDossier(dossierId, clientId, installerId) {
+      return isAdmin()
+        || (clientId != null && isOwnerClient(clientId))
+        || (installerId != null && isSignedIn() && request.auth.token.installerId == installerId)
+        || (
+          dossierId != null
+            && isSignedIn()
+            && let dossierPath = /databases/$(database)/documents/dossiers/$(dossierId);
+               exists(dossierPath)
+               && (
+                 (get(dossierPath).data.client_id != null && isOwnerClient(get(dossierPath).data.client_id))
+                 || (get(dossierPath).data.installerId != null && request.auth.token.installerId == get(dossierPath).data.installerId)
+               )
+        );
+    }
+
     match /leads/{leadId} {
       allow read, write: if isAdmin();
     }
@@ -81,6 +97,25 @@ service cloud.firestore {
 
     match /counters/{counterId} {
       allow read, write: if isAdmin();
+    }
+
+    match /ai_summaries/{summaryId} {
+      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
+      allow write: if false;
+    }
+
+    match /ai_actions/{actionId} {
+      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
+      allow write: if false;
+    }
+
+    match /ai_chunks/{chunkId} {
+      allow read: if canAccessAiDossier(resource.data.dossierId, resource.data.clientId, resource.data.installerId);
+      allow write: if false;
+    }
+
+    match /ai_logs/{logId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {
