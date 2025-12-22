@@ -3,14 +3,28 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() { return request.auth != null; }
-    function isAdmin() { return isSignedIn() && request.auth.token.role == 'admin'; }
-    function isClient() { return isSignedIn() && request.auth.token.role == 'client'; }
-    function installerId() { return request.auth.token.installerId; }
+    function role() { return isSignedIn() ? request.auth.token.role : null; }
+
+    function isAdmin() {
+      return isSignedIn() && (role() == 'admin' || role() == 'operator');
+    }
+
+    function isInstaller() {
+      return isSignedIn() && (role() == 'installer');
+    }
+
+    function installerId() {
+      return request.auth.token.installerId;
+    }
+
+    function isInstallerOf(resourceInstallerId) {
+      return isInstaller() && installerId() != null && resourceInstallerId == installerId();
+    }
 
     // Generic helper for ai_* docs: authorize via clientId (uid) OR installerId, otherwise admin only.
     function canReadAiDoc(data) {
       return isAdmin()
-        || (isClient()
+        || (isInstaller()
             && (
               (data.clientId != null && data.clientId == request.auth.uid)
               || (data.installerId != null && data.installerId == installerId())
@@ -18,15 +32,14 @@ service cloud.firestore {
           );
     }
 
-    // ---- Existing CRM rules (keep conservative, non-destructive) ----
-
+    // ---- Existing CRM rules (keep conservative) ----
     match /files/{id} {
-      allow read: if isAdmin() || (isClient() && resource.data.installerId == installerId());
+      allow read: if isAdmin() || (isInstaller() && resource.data.installerId == installerId());
       allow create, update, delete: if isAdmin();
     }
 
     match /clients/{id} {
-      allow read: if isAdmin() || (isClient() && request.auth.uid == id);
+      allow read: if isAdmin() || (isInstaller() && request.auth.uid == id);
       allow create, update, delete: if isAdmin();
     }
 
@@ -36,6 +49,43 @@ service cloud.firestore {
 
     match /counters/{id} {
       allow read, create, update, delete: if isAdmin();
+    }
+
+    // ---- Master CRM shared model (recommended) ----
+    match /tenants/{tid} {
+      allow read: if isAdmin() || isInstallerOf(tid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /dossiers/{id} {
+      allow read: if isAdmin() || isInstallerOf(resource.data.installerId);
+
+      // Installer writes are intentionally limited: only allow writing "installer-facing" fields.
+      // Everything else should be enforced via Cloud Run (core-api).
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+        || (
+          isInstallerOf(resource.data.installerId)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'installerNotes',
+            'installerNextStep',
+            'installerDocsMissing',
+            'installerLastSeenAt',
+            'updatedAt'
+          ])
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /dossiers/{id}/docs/{docId} {
+      allow read: if isAdmin() || isInstallerOf(get(/databases/$(database)/documents/dossiers/$(id)).data.installerId);
+      allow create: if isAdmin() || isInstallerOf(get(/databases/$(database)/documents/dossiers/$(id)).data.installerId);
+      allow update, delete: if isAdmin();
     }
 
     // ---- AI collections ----

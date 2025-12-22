@@ -13,6 +13,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "core-api",
+          "region": "europe-west1"
+        }
+      },
+      {
         "source": "/admin/**",
         "destination": "/index.html"
       },
