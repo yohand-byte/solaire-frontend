@@ -229,35 +229,47 @@ export async function ensureUserDoc(
   data: { role: User["role"]; client_id?: string | null; email?: string | null; name?: string | null; permissions?: string[] }
 ) {
   const ref = doc(db, "users", uid);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const existing = snap.exists() ? snap.data() : {};
-    tx.set(
-      ref,
-      {
-        id: uid,
-        role: data.role,
-        client_id: data.client_id ?? (existing as any).client_id ?? null,
-        email: data.email ?? (existing as any).email ?? null,
-        name: data.name ?? (existing as any).name ?? null,
-        permissions: data.permissions ?? (existing as any).permissions ?? [],
-        created_at: (existing as any).created_at ?? serverTimestamp(),
-        updated_at: serverTimestamp(),
-        last_login: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  });
+  let existing: Record<string, unknown> = {};
+  try {
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      existing = snap.data() as Record<string, unknown>;
+    }
+  } catch (err) {
+    console.warn("[ensureUserDoc] read failed", err);
+  }
+
+  await setDoc(
+    ref,
+    {
+      id: uid,
+      role: data.role,
+      client_id: data.client_id ?? (existing as any).client_id ?? null,
+      email: data.email ?? (existing as any).email ?? null,
+      name: data.name ?? (existing as any).name ?? null,
+      permissions: data.permissions ?? (existing as any).permissions ?? [],
+      created_at: (existing as any).created_at ?? serverTimestamp(),
+      updated_at: serverTimestamp(),
+      last_login: serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 export async function findClientIdByEmail(db: Firestore, email: string | null | undefined) {
   if (!email) return null;
-  const snap = await getDocs(
-    query(collection(db, "clients"), where("email", "==", email), limit(1))
-  );
-  const docSnap = snap.docs[0];
-  if (!docSnap) {
-    console.warn("[findClientIdByEmail] no client found for email", email);
+  try {
+    const snap = await getDocs(
+      query(collection(db, "clients"), where("email", "==", email), limit(1))
+    );
+    const docSnap = snap.docs[0];
+    if (!docSnap) {
+      console.warn("[findClientIdByEmail] no client found for email", email);
+      return null;
+    }
+    return docSnap.id;
+  } catch (err) {
+    console.warn("[findClientIdByEmail] lookup failed", err);
+    return null;
   }
-  return docSnap ? docSnap.id : null;
 }

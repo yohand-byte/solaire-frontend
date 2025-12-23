@@ -12,11 +12,15 @@ const required = (key: string) => {
 
 const firebaseConfig = {
   apiKey: required("VITE_FIREBASE_API_KEY"),
-  authDomain: required("VITE_FIREBASE_AUTH_DOMAIN"),
+  authDomain: "solaire-frontend.firebaseapp.com",
   projectId: required("VITE_FIREBASE_PROJECT_ID"),
+  appId: required("VITE_FIREBASE_APP_ID"),
+  storageBucket: required("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: required("VITE_FIREBASE_MESSAGING_SENDER_ID"),
 };
 
-const firebaseApp = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+export const app =
+  getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
 
-export const auth = getAuth(firebaseApp);
-export const db = getFirestore(firebaseApp);
+export const auth = getAuth(app);
+export const db = getFirestore(app);

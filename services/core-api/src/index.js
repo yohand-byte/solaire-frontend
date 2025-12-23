@@ -1,13 +1,48 @@
 import express from "express";
 import cors from "cors";
 import admin from "firebase-admin";
+import fs from "fs";
 
 const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "2mb" }));
 
+const resolveProjectId = () => {
+  const direct =
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.PROJECT_ID ||
+    "";
+  if (direct) return direct;
+
+  const raw = process.env.FIREBASE_CONFIG || "";
+  if (!raw) return "";
+
+  try {
+    const trimmed = raw.trim();
+    const json =
+      trimmed.startsWith("{")
+        ? JSON.parse(trimmed)
+        : JSON.parse(fs.readFileSync(trimmed, "utf8"));
+    return json?.projectId || json?.project_id || "";
+  } catch (err) {
+    console.error("[core-api] failed to parse FIREBASE_CONFIG", { err: err.message });
+    return "";
+  }
+};
+
 if (!admin.apps.length) {
-  admin.initializeApp();
+  const projectId = resolveProjectId();
+  if (!projectId) {
+    console.error("[core-api] missing projectId for Firebase Admin");
+  } else {
+    console.log("[core-api] firebase-admin projectId", projectId);
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+      projectId,
+    });
+  }
 }
 
 function bearer(req) {
