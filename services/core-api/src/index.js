@@ -75,6 +75,19 @@ function requireInstaller(req, res, next) {
   return res.status(403).json({ error: "forbidden" });
 }
 
+function getDb() {
+  if (!admin.apps.length) {
+    throw new Error("firebase_admin_not_initialized");
+  }
+  return admin.firestore();
+}
+
+function normalizeEmail(value) {
+  if (!value) return "";
+  return String(value).trim().toLowerCase();
+}
+
+
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 app.get("/api/me", auth, (req, res) => {
@@ -103,6 +116,77 @@ app.post("/api/admin/set-claims", auth, requireAdmin, async (req, res) => {
 // Installer-only: example write via API (recommended instead of broad Firestore writes)
 app.post("/api/installer/ping", auth, requireInstaller, async (req, res) => {
   res.json({ ok: true, installerId: req.user?.installerId || null });
+});
+
+
+// Admin-only: approve a lead, create/merge client, link lead
+app.post("/api/leads/:id/approve", auth, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const leadId = req.params.id;
+    if (!leadId) return res.status(400).json({ error: "missing_lead_id" });
+
+    const leadRef = db.collection("leads").doc(leadId);
+    const leadSnap = await leadRef.get();
+    if (!leadSnap.exists) return res.status(404).json({ error: "lead_not_found" });
+
+    const lead = leadSnap.data() || {};
+    const email = normalizeEmail(lead.email || req.body?.email || "");
+    const name = lead.name || req.body?.name || null;
+    const phone = lead.phone || req.body?.phone || null;
+    const source = lead.source || req.body?.source || null;
+
+    const clientRef = lead.clientId
+      ? db.collection("clients").doc(lead.clientId)
+      : db.collection("clients").doc();
+    const clientId = clientRef.id;
+
+    await clientRef.set(
+      {
+        email: email || null,
+        name,
+        phone,
+        source,
+        lead_id: leadId,
+        status: "active",
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    await leadRef.set(
+      {
+        status: "approved",
+        clientId,
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    res.json({ ok: true, leadId, clientId });
+  } catch (err) {
+    console.error("[api] approve lead failed", err);
+    res.status(500).json({ error: "approve_failed" });
+  }
+});
+
+// Admin-only: lookup client by email
+app.get("/api/clients", auth, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const email = normalizeEmail(req.query?.email);
+    if (!email) return res.status(400).json({ error: "missing_email" });
+
+    const snap = await db.collection("clients").where("email", "==", email).limit(1).get();
+    const doc = snap.docs[0];
+    if (!doc) return res.status(404).json({ error: "client_not_found" });
+
+    res.json({ ok: true, clientId: doc.id, client: doc.data() });
+  } catch (err) {
+    console.error("[api] lookup client failed", err);
+    res.status(500).json({ error: "lookup_failed" });
+  }
 });
 
 const port = process.env.PORT || 8080;
