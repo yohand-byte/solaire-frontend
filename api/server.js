@@ -14,6 +14,27 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
+// CORS: Autoriser Firebase Hosting + localhost dev
+const allowedOrigins = [
+  "https://solaire-frontend.web.app",
+  "https://solaire-frontend.firebaseapp.com",
+  "https://solaire-frontend-828508661560.europe-west1.run.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    console.warn("CORS blocked:", origin);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-ADMIN-KEY", "X-Requested-With"],
+  credentials: true,
+};
+
 const requireAdminKey = (req, res, next) => {
   const key = req.header("X-ADMIN-KEY");
   if (!key || key !== process.env.ADMIN_API_KEY) {
@@ -25,13 +46,7 @@ const requireAdminKey = (req, res, next) => {
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
-app.use(
-  cors({
-    origin: process.env.FRONTEND_ORIGIN,
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-ADMIN-KEY"],
-  })
-);
+app.use(cors(corsOptions));
 app.use((req, _res, next) => {
   if (req.path.startsWith("/api/admin/leads")) {
     console.log("HIT", req.method, req.path);
