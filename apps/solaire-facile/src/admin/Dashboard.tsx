@@ -406,8 +406,9 @@ export default function AdminDashboard() {
               ) : null}
             </>
           ) : (
-          {selectedFile ? (
-            <div className="card" style={{ marginBottom: 12 }}>
+            <>
+              {selectedFile ? (
+                <div className="card" style={{ marginBottom: 12 }}>
               <div className="card-head">
                 <div>
                   <div className="card-title">Fiche dossier</div>
@@ -576,9 +577,9 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               </div>
-            </div>
-          ) : null}
-          <div className="hero">
+                </div>
+              ) : null}
+              <div className="hero">
             <div className="hero-left">
               <div className="hero-title">Vue d’ensemble</div>
               <div className="hero-sub">
@@ -818,7 +819,8 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
-          </div>
+              </div>
+            </>
           )}
         </main>
       </div>

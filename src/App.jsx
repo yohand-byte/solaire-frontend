@@ -75,6 +75,51 @@ const displayCompany = (item) => {
     ""
   );
 };
+const companyValue = (item) => {
+  if (!item) return "";
+  return (
+    item.company ||
+    item.companyName ||
+    item.entreprise ||
+    item.societe ||
+    item.raisonSociale ||
+    item.businessName ||
+    ""
+  );
+};
+const packValue = (item) => {
+  if (!item) return "";
+  return (
+    item.packCode ||
+    item.pack ||
+    item.pack_label ||
+    item.packLabel ||
+    item.packName ||
+    item.offre ||
+    item.offer ||
+    item.product ||
+    item.produit ||
+    ""
+  );
+};
+const priceValue = (item) => {
+  if (!item) return "";
+  const candidates = [
+    item.price,
+    item.prix,
+    item.pack_price,
+    item.packPrice,
+    item.packPriceTtc,
+    item.amount,
+    item.montant,
+    item.pack?.basePrice,
+    item.pack?.price,
+  ];
+  for (const value of candidates) {
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return "";
+};
 
 const HomeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -194,11 +239,11 @@ function LeadsTable({ leads, onSelect }) {
           {leads.map((l) => (
             <tr key={l.id} onClick={() => onSelect(l)} style={{ cursor: 'pointer' }}>
               <td>{displayName(l) || "—"}</td>
-              <td>{displayCompany(l) || "—"}</td>
+              <td>{companyValue(l) || "—"}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
-              <td>{packLabel(l)}</td>
-              <td>{packPrice(l)}</td>
+              <td>{packValue(l) || "—"}</td>
+              <td>{priceValue(l) || "—"}</td>
               <td>{formatDate(l.createdAt)}</td>
               <td><span className={`badge-status ${l.status || 'nouveau'}`}>{l.status || 'nouveau'}</span></td>
               <td>{l.source || 'webhook'}</td>
@@ -244,9 +289,9 @@ function LeadDetail({ lead, clientsById }) {
   return (
     <div className="card">
       <h3>{displayName(lead) || "—"}</h3>
-      <div className="small">{displayCompany(lead) || "—"}</div>
+      <div className="small">{companyValue(lead) || "—"}</div>
       <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
-      <div className="small">Pack : {packLabel(lead)} · Prix : {packPrice(lead)} €</div>
+      <div className="small">Pack : {packValue(lead) || "—"} · Prix : {priceValue(lead) || "—"} €</div>
       <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
       <div className="badge" style={{ marginTop: 8 }}>{lead.status || 'nouveau'}</div>
       {linkedClientLabel && <div className="pill" style={{ marginTop: 6 }}>Client lié : {linkedClientLabel}</div>}
@@ -1014,8 +1059,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {todoToday.slice(0, 10).map((l) => (
                     <tr key={l.id}>
-                      <td>{displayCompany(l) || "—"}</td>
-                      <td>{packLabel(l)}</td>
+                      <td>{companyValue(l) || "—"}</td>
+                      <td>{packValue(l) || "—"}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
                   ))}
@@ -1059,9 +1104,9 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {latestLeads.map((l) => (
                     <tr key={l.id} className="clickable" onClick={() => { setTab('leads'); setSelected(l); }}>
-                      <td>{displayCompany(l) || "—"}</td>
+                      <td>{companyValue(l) || "—"}</td>
                       <td>{displayName(l) || "—"}</td>
-                      <td>{packLabel(l)}</td>
+                      <td>{packValue(l) || "—"}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
                   ))}
@@ -1240,11 +1285,11 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                       style={{ cursor: "pointer" }}
                     >
                       <td>{displayName(c) || "—"}</td>
-                      <td>{displayCompany(c) || "—"}</td>
+                      <td>{companyValue(c) || "—"}</td>
                       <td>{c.email || "—"}</td>
                       <td>{c.phone || "—"}</td>
-                      <td>{packLabel(c)}</td>
-                      <td>{packPrice(c)}</td>
+                      <td>{packValue(c) || "—"}</td>
+                      <td>{priceValue(c) || "—"}</td>
                       <td>{formatDate(c.createdAt)}</td>
                       <td>{c.segment || "small"}</td>
                       <td><span className={`status-badge ${c.status || 'actif'}`}>{c.status || 'actif'}</span></td>
@@ -1364,8 +1409,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                     <td>{f.title || "—"}</td>
                     <td>{displayCompany(clientsById[f.clientId]) || displayName(clientsById[f.clientId]) || f.clientFinal || f.clientId || "—"}</td>
                     <td><span className={`badge-status ${f.status || 'en_cours'}`}>{f.status || "en_cours"}</span></td>
-                  <td>{packLabel(f)}</td>
-                  <td>{packPrice(f)}</td>
+                  <td>{packValue(f) || "—"}</td>
+                  <td>{priceValue(f) || "—"}</td>
                   <td>{formatDate(f.createdAt)}</td>
                     <td>
                     <div className="actions" onClick={(e) => e.stopPropagation()}>
