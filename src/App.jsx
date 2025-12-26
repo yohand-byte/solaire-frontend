@@ -5,6 +5,10 @@ const API_BASE = (
   "https://solaire-api-828508661560.europe-west1.run.app"
 ).replace(/\/+$/, '');
 const API_TOKEN = 'saftoken-123';
+const API_AUTH_HEADERS = {
+  Authorization: `Bearer ${API_TOKEN}`,
+  "X-Api-Token": API_TOKEN,
+};
 const formatDate = (ts) => {
   if (!ts) return "—";
   const d = ts?._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
@@ -177,7 +181,7 @@ function useFetch(url, deps = []) {
     if (!url) return;
     let mounted = true;
     setLoading(true);
-    fetch(url)
+    fetch(url, { headers: API_AUTH_HEADERS })
       .then(async (r) => {
         const text = await r.text();
         if (!r.ok) throw new Error(text || `HTTP ${r.status}`);
@@ -270,7 +274,11 @@ function LeadDetail({ lead, clientsById }) {
     if (lead?.clientId) return;
     setConverting(true);
     try {
-      const res = await fetch(`${API_BASE}/leads/${lead.id}/convert`, { method: "POST", headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN }, body: JSON.stringify({}) });
+      const res = await fetch(`${API_BASE}/leads/${lead.id}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...API_AUTH_HEADERS },
+        body: JSON.stringify({}),
+      });
       const body = await res.json();
       if (!res.ok) {
         if (res.status === 409 || body?.error === "lead_already_converted") throw new Error("Ce lead a déjà été converti");
@@ -346,7 +354,7 @@ function ClientDetail({ client, onCreatedFile, existingFiles = [] }) {
       const sel = PACK_OPTIONS.find((p) => p.code === code) || PACK_OPTIONS[0];
       const res = await fetch(`${API_BASE}/files`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+        headers: { "Content-Type": "application/json", ...API_AUTH_HEADERS },
         body: JSON.stringify({
           title: `Dossier ${client.name || client.id}`,
           clientId: client.id,
@@ -470,7 +478,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
       try {
         await fetch(`${API_BASE}/files/${file.id}/attachments?name=${encodeURIComponent(target.name)}`, {
           method: "DELETE",
-          headers: { "X-Api-Token": API_TOKEN },
+          headers: API_AUTH_HEADERS,
         });
       } catch (err) {
         console.warn("Suppression serveur échouée, conservée local", err);
@@ -482,7 +490,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
     let url = att.url || att.openUrl || att.preview;
     if (!url && file?.id) {
       try {
-        const res = await fetch(`${API_BASE}/files/${file.id}/attachments`, { headers: { "X-Api-Token": API_TOKEN } });
+        const res = await fetch(`${API_BASE}/files/${file.id}/attachments`, { headers: API_AUTH_HEADERS });
         if (res.ok) {
           const list = await res.json();
           if (Array.isArray(list)) {
@@ -504,7 +512,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
     // Dernier recours: tenter de télécharger le binaire puis ouvrir
     if (!url && file?.id) {
       try {
-        const res = await fetch(`${API_BASE}/files/${file.id}/attachments/${encodeURIComponent(att.name)}`, { headers: { "X-Api-Token": API_TOKEN } });
+        const res = await fetch(`${API_BASE}/files/${file.id}/attachments/${encodeURIComponent(att.name)}`, { headers: API_AUTH_HEADERS });
         if (res.ok) {
           const blob = await res.blob();
           url = URL.createObjectURL(blob);
@@ -527,7 +535,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
     try {
       const res = await fetch(`${API_BASE}/files/${file.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+        headers: { "Content-Type": "application/json", ...API_AUTH_HEADERS },
         body: JSON.stringify({ ...form, pack: form.packCode }),
       });
       const body = await res.json();
@@ -818,7 +826,7 @@ export default function App() {
       const selectedPack = PACK_OPTIONS.find((p) => p.code === form.packCode) || PACK_OPTIONS[0];
       const res = await fetch(`${API_BASE}/leads`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+        headers: { "Content-Type": "application/json", ...API_AUTH_HEADERS },
         body: JSON.stringify({
           ...form,
           packCode: selectedPack.code,
@@ -844,7 +852,7 @@ export default function App() {
       const sel = PACK_OPTIONS.find((p) => p.code === (clientForm.packCode || clientForm.pack)) || PACK_OPTIONS[0];
       const res = await fetch(`${API_BASE}/clients`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+        headers: { "Content-Type": "application/json", ...API_AUTH_HEADERS },
         body: JSON.stringify({
           ...clientForm,
           id: editingClientId || undefined,
@@ -1475,7 +1483,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               try {
             const res = await fetch(`${API_BASE}/files`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", "X-Api-Token": API_TOKEN },
+              headers: { "Content-Type": "application/json", ...API_AUTH_HEADERS },
               body: JSON.stringify({ ...fileForm, id: editingFileId || undefined, pack: fileForm.packCode }),
             });
             const body = await res.json();
