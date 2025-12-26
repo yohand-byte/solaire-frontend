@@ -25,10 +25,19 @@ const packLabel = (item) => {
     if (typeof item.packLabel === "object") return item.packLabel.label || item.packLabel.code || "—";
     return item.packLabel;
   }
+  if (item.packCode) {
+    const code = String(item.packCode).toUpperCase();
+    const opt = PACK_OPTIONS.find((p) => p.code === code);
+    return opt?.label || item.packCode;
+  }
   if (item.pack && typeof item.pack === "object") {
     return item.pack.label || item.pack.code || "—";
   }
-  if (item.pack) return item.pack;
+  if (item.pack) {
+    const code = String(item.pack).toUpperCase();
+    const opt = PACK_OPTIONS.find((p) => p.code === code);
+    return opt?.label || item.pack;
+  }
   if (item.packCode) return item.packCode;
   return "—";
 };
@@ -36,8 +45,35 @@ const packPrice = (item) => {
   if (!item) return "—";
   if (item.packPrice !== undefined && item.packPrice !== null && item.packPrice !== "") return item.packPrice;
   if (item.price !== undefined && item.price !== null && item.price !== "") return item.price;
+  if (item.prix !== undefined && item.prix !== null && item.prix !== "") return item.prix;
+  if (item.pack_price !== undefined && item.pack_price !== null && item.pack_price !== "") return item.pack_price;
+  if (item.packPriceTtc !== undefined && item.packPriceTtc !== null && item.packPriceTtc !== "") return item.packPriceTtc;
   if (item.pack && typeof item.pack === "object" && item.pack.basePrice !== undefined) return item.pack.basePrice;
   return "—";
+};
+const displayName = (item) => {
+  if (!item) return "—";
+  if (item.name) return item.name;
+  if (item.fullName) return item.fullName;
+  if (item.clientFinal) return item.clientFinal;
+  if (item.profile) return item.profile;
+  if (item.contactName) return item.contactName;
+  const first = item.firstName || item.firstname;
+  const last = item.lastName || item.lastname;
+  const joined = [first, last].filter(Boolean).join(" ");
+  return joined || "—";
+};
+const displayCompany = (item) => {
+  if (!item) return "—";
+  return (
+    item.company ||
+    item.companyName ||
+    item.entreprise ||
+    item.societe ||
+    item.raisonSociale ||
+    item.businessName ||
+    "—"
+  );
 };
 
 const HomeIcon = () => (
@@ -127,7 +163,7 @@ function Kanban({ leads }) {
             .filter((l) => (l.status || '').toLowerCase() === col.key)
             .map((l) => (
               <div className="card-lead" key={l.id}>
-                <div><strong>{l.name || 'Sans nom'}</strong></div>
+                <div><strong>{displayName(l)}</strong></div>
                 <div className="small">{l.email || l.phone || '—'}</div>
               </div>
             ))}
@@ -157,8 +193,8 @@ function LeadsTable({ leads, onSelect }) {
         <tbody>
           {leads.map((l) => (
             <tr key={l.id} onClick={() => onSelect(l)} style={{ cursor: 'pointer' }}>
-              <td>{l.name || '—'}</td>
-              <td>{l.company || l.companyName || '—'}</td>
+              <td>{displayName(l)}</td>
+              <td>{displayCompany(l)}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
               <td>{packLabel(l)}</td>
@@ -179,7 +215,7 @@ function LeadDetail({ lead, clientsById }) {
   const [converting, setConverting] = useState(false);
   if (!lead) return <div className="card">Sélectionne un lead</div>;
   const linkedClientLabel = lead?.clientId
-    ? (clientsById?.[lead.clientId]?.company || clientsById?.[lead.clientId]?.name || lead.clientId)
+    ? (displayCompany(clientsById?.[lead.clientId]) || displayName(clientsById?.[lead.clientId]) || lead.clientId)
     : null;
 
   const convert = async () => {
@@ -207,8 +243,8 @@ function LeadDetail({ lead, clientsById }) {
   };
   return (
     <div className="card">
-      <h3>{lead.name || 'Sans nom'}</h3>
-      <div className="small">{lead.company || lead.companyName || '—'}</div>
+      <h3>{displayName(lead)}</h3>
+      <div className="small">{displayCompany(lead)}</div>
       <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
       <div className="small">Pack : {packLabel(lead)} · Prix : {packPrice(lead)} €</div>
       <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
@@ -288,8 +324,8 @@ function ClientDetail({ client, onCreatedFile, existingFiles = [] }) {
   };
   return (
     <div className="card">
-      <h3>{client.name || client.company || 'Sans nom'}</h3>
-      <div className="small">{client.company || '—'}</div>
+      <h3>{displayName(client)}</h3>
+      <div className="small">{displayCompany(client)}</div>
       <div className="small">{client.email || '—'} · {client.phone || '—'}</div>
       <div className="pill" style={{ marginTop: 6 }}>{packLabel(client)} • {packPrice(client)} € • {client.segment || 'small'} • {client.status || 'actif'}</div>
       <div style={{ marginTop: 8 }}>
@@ -321,7 +357,7 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
   const [form, setForm] = useState(file || {});
   const fileAttachments = file ? (attachments[file.id] || []) : [];
   const clientLabel = file
-    ? (clientsById?.[file.clientId]?.company || clientsById?.[file.clientId]?.name || file.clientId || '—')
+    ? (displayCompany(clientsById?.[file.clientId]) || displayName(clientsById?.[file.clientId]) || file.clientFinal || file.clientId || '—')
     : '—';
 
   useEffect(() => {
@@ -815,8 +851,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
       const matchStatus = leadFilters.status ? (l.status || '').toLowerCase() === leadFilters.status : true;
       const matchSource = leadFilters.source ? (l.source || '').toLowerCase().includes(leadFilters.source.toLowerCase()) : true;
       const matchSearch = leadFilters.search
-        ? (l.name || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
-          (l.company || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+        ? displayName(l).toLowerCase().includes(leadFilters.search.toLowerCase()) ||
+          displayCompany(l).toLowerCase().includes(leadFilters.search.toLowerCase()) ||
           (l.email || '').toLowerCase().includes(leadFilters.search.toLowerCase()) ||
           (l.phone || '').toLowerCase().includes(leadFilters.search.toLowerCase())
         : true;
@@ -829,7 +865,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
       const matchStatus = fileFilters.status ? (f.status || '').toLowerCase() === fileFilters.status : true;
       const packCode = (f.packCode || (typeof f.pack === "object" ? f.pack.code : f.pack) || '').toLowerCase();
       const matchPack = fileFilters.pack ? packCode === fileFilters.pack : true;
-      const clientLabel = clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || '';
+      const clientLabel = displayCompany(clientsById[f.clientId]) || displayName(clientsById[f.clientId]) || f.clientFinal || f.clientId || '';
       const matchClient = fileFilters.client ? clientLabel.toLowerCase().includes(fileFilters.client.toLowerCase()) : true;
       return matchStatus && matchPack && matchClient;
     });
@@ -839,8 +875,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
     return (clients || []).filter((c) => {
       const q = clientFilters.search.toLowerCase();
       const matchSearch = q
-        ? (c.name || '').toLowerCase().includes(q) ||
-          (c.company || '').toLowerCase().includes(q) ||
+        ? displayName(c).toLowerCase().includes(q) ||
+          displayCompany(c).toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
           (c.phone || '').toLowerCase().includes(q)
         : true;
@@ -973,7 +1009,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {todoToday.slice(0, 10).map((l) => (
                     <tr key={l.id}>
-                      <td>{l.company || "—"}</td>
+                      <td>{displayCompany(l)}</td>
                       <td>{packLabel(l)}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
@@ -1018,8 +1054,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {latestLeads.map((l) => (
                     <tr key={l.id} className="clickable" onClick={() => { setTab('leads'); setSelected(l); }}>
-                      <td>{l.company || "—"}</td>
-                      <td>{l.name || "—"}</td>
+                      <td>{displayCompany(l)}</td>
+                      <td>{displayName(l)}</td>
                       <td>{packLabel(l)}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
@@ -1198,8 +1234,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                       onClick={() => setSelectedClient(c)}
                       style={{ cursor: "pointer" }}
                     >
-                      <td>{c.name || "—"}</td>
-                      <td>{c.company || "—"}</td>
+                      <td>{displayName(c)}</td>
+                      <td>{displayCompany(c)}</td>
                       <td>{c.email || "—"}</td>
                       <td>{c.phone || "—"}</td>
                       <td>{packLabel(c)}</td>
@@ -1215,10 +1251,10 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                             const code = c.packCode || packObj?.code || (typeof c.pack === "string" ? c.pack.toUpperCase() : PACK_OPTIONS[0].code);
                             const opt = PACK_OPTIONS.find((p) => p.code === code) || PACK_OPTIONS[0];
                             setClientForm({
-                              name: c.name || "",
+                              name: c.name || c.fullName || c.clientFinal || "",
                               email: c.email || "",
                               phone: c.phone || "",
-                              company: c.company || "",
+                              company: c.company || c.companyName || c.entreprise || c.societe || c.raisonSociale || "",
                               packCode: code,
                               packLabel: c.packLabel || packObj?.label || opt.label,
                               packPrice: c.packPrice ?? c.price ?? packObj?.basePrice ?? opt.price,
@@ -1321,7 +1357,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                     style={{ cursor: "pointer" }}
                     >
                     <td>{f.title || "—"}</td>
-                    <td>{clientsById[f.clientId]?.company || clientsById[f.clientId]?.name || f.clientId || "—"}</td>
+                    <td>{displayCompany(clientsById[f.clientId]) || displayName(clientsById[f.clientId]) || f.clientFinal || f.clientId || "—"}</td>
                     <td><span className={`badge-status ${f.status || 'en_cours'}`}>{f.status || "en_cours"}</span></td>
                   <td>{packLabel(f)}</td>
                   <td>{packPrice(f)}</td>
@@ -1450,8 +1486,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               <div className="modal-header">
                 <div>
                   <div className="pill soft">Client</div>
-                  <h3 style={{ margin: "6px 0 0" }}>{previewClient.name || "Sans nom"}</h3>
-                  <div className="small">{previewClient.company || "—"}</div>
+                  <h3 style={{ margin: "6px 0 0" }}>{displayName(previewClient)}</h3>
+                  <div className="small">{displayCompany(previewClient)}</div>
                   <div className="small">{previewClient.email || "—"} · {previewClient.phone || "—"}</div>
                 </div>
                 <button className="btn-icon" onClick={() => setPreviewClient(null)}>✕</button>
@@ -1487,7 +1523,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                   <div className="pill soft">Dossier</div>
                   <h3 style={{ margin: "6px 0 0" }}>{previewFile.title || "Sans titre"}</h3>
                   <div className="small">
-                  Client : {clientsById[previewFile.clientId]?.company || clientsById[previewFile.clientId]?.name || previewFile.clientId || "—"} • Pack : {packLabel(previewFile)}
+                  Client : {displayCompany(clientsById[previewFile.clientId]) || displayName(clientsById[previewFile.clientId]) || previewFile.clientFinal || previewFile.clientId || "—"} • Pack : {packLabel(previewFile)}
                   </div>
                 </div>
                 <button className="btn-icon" onClick={() => setPreviewFile(null)}>✕</button>

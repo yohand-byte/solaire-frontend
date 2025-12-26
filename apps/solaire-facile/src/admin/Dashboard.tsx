@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { signOut } from "firebase/auth";
-import { auth } from "../lib/firestore";
+import { auth, db, app } from "../lib/firestore";
+import { doc, updateDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { PACKS } from "../constants";
 import { useCollection } from "../hooks/useCollection";
 import ThemeToggle from "../components/ThemeToggle";
@@ -44,6 +46,27 @@ export default function AdminDashboard() {
   const [packFilter, setPackFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
+
+  const [params, setParams] = useSearchParams();
+  const [quickFilter, setQuickFilter] = useState<"all" | "active" | "today" | "overdue">("all");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientEmailSaving, setClientEmailSaving] = useState(false);
+  const [clientEmailInfo, setClientEmailInfo] = useState<string | null>(null);
+  const [clientEmailError, setClientEmailError] = useState<string | null>(null);
+  const [sendInfo, setSendInfo] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendLoading, setSendLoading] = useState(false);
+  const [statusDraft, setStatusDraft] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusInfo, setStatusInfo] = useState<string | null>(null);
+
+  const openFile = (id: string) => setParams({ file: id });
+  const closeFile = () => {
+    params.delete("file");
+    setParams(params, { replace: true } as any);
+  };
+  const selectedId = params.get("file");
 
   const loading = leadsLoading || filesLoading;
   const leads = (leadsData || []) as any[];
@@ -104,6 +127,7 @@ export default function AdminDashboard() {
 
   const filteredFiles = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const packNeedle = packFilter.trim().toLowerCase();
     return files
       .slice()
       .sort((a: any, b: any) => {
@@ -114,14 +138,50 @@ export default function AdminDashboard() {
       .filter((file: any) => {
         const pack = ((file.pack || "") as string).toLowerCase();
         const status = ((file.statutGlobal || file.status || "") as string).toLowerCase();
-        if (packFilter && pack !== packFilter) return false;
+        const next = toDate(file.nextActionDate);
+        const today0 = startOfToday();
+        const tomorrow0 = today0 + 24 * 60 * 60 * 1000;
+
+        if (packNeedle && pack !== packNeedle) return false;
         if (statusFilter && status !== statusFilter) return false;
+
+        if (quickFilter === "active") {
+          if (status !== "en_cours") return false;
+        }
+        if (quickFilter === "today") {
+          if (!next) return false;
+          const t = next.getTime();
+          if (t < today0 || t >= tomorrow0) return false;
+        }
+        if (quickFilter === "overdue") {
+          if (!next) return false;
+          if (["finalise", "clos"].includes(status)) return false;
+          if (next.getTime() >= today0) return false;
+        }
+
         if (!needle) return true;
         return [file.reference, file.title, file.clientFinal, file.address]
           .filter(Boolean)
           .some((v: string) => v.toLowerCase().includes(needle));
       });
-  }, [files, packFilter, statusFilter, search]);
+  }, [files, packFilter, statusFilter, search, quickFilter]);
+
+
+  const selectedFile = useMemo(() => {
+    if (!selectedId) return null;
+    return files.find((x: any) => String(x.id) === String(selectedId)) || null;
+  }, [files, selectedId]);
+
+  useEffect(() => {
+    setClientEmail(selectedFile?.clientEmail ? String(selectedFile.clientEmail) : "");
+    setClientEmailInfo(null);
+    setClientEmailError(null);
+    setSendInfo(null);
+    setSendError(null);
+    setStatusDraft(String(selectedFile?.statutGlobal || selectedFile?.status || ""));
+    setStatusError(null);
+    setStatusInfo(null);
+  }, [selectedFile?.id]);
 
   if (loading) {
     return (
@@ -170,8 +230,9 @@ export default function AdminDashboard() {
             type="button"
             className="btn btn-danger"
             onClick={async () => {
-              await signOut(auth);
-              navigate("/admin/login", { replace: true });
+              try { localStorage.clear(); } catch {}
+              try { await signOut(auth); } catch {}
+              window.location.assign("/admin/login");
             }}
           >
             Déconnexion
@@ -199,22 +260,22 @@ export default function AdminDashboard() {
           <div className="side-sep" />
 
           <div className="side-kpis">
-            <button type="button" className="side-kpi" onClick={() => navigate("/admin")}>
+            <button type="button" className="side-kpi" onClick={() => { setQuickFilter("all"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
               <span className="side-kpi-label">Dossiers</span>
               <span className="side-kpi-value">{stats.filesTotal}</span>
             </button>
 
-            <button type="button" className="side-kpi" onClick={() => navigate("/admin")}>
+            <button type="button" className="side-kpi" onClick={() => { setQuickFilter("active"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
               <span className="side-kpi-label">En cours</span>
               <span className="side-kpi-value">{stats.filesActive}</span>
             </button>
 
-            <button type="button" className="side-kpi" onClick={() => navigate("/admin")}>
+            <button type="button" className="side-kpi" onClick={() => { setQuickFilter("today"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
               <span className="side-kpi-label">À faire (jour)</span>
               <span className="side-kpi-value">{actionsToday.length}</span>
             </button>
 
-            <button type="button" className="side-kpi side-kpi-danger" onClick={() => navigate("/admin")}>
+            <button type="button" className="side-kpi side-kpi-danger" onClick={() => { setQuickFilter("overdue"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
               <span className="side-kpi-label">En retard</span>
               <span className="side-kpi-value">{overdue.length}</span>
             </button>
@@ -231,6 +292,172 @@ export default function AdminDashboard() {
         </aside>
 
         <main className="main">
+          {selectedFile ? (
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div className="card-head">
+                <div>
+                  <div className="card-title">Fiche dossier</div>
+                  <div className="card-sub">{selectedFile.reference || selectedFile.id}</div>
+                </div>
+                <div className="panel-actions">
+                  <button type="button" className="btn btn-secondary" onClick={closeFile}>Retour</button>
+                </div>
+              </div>
+              <div className="grid-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="panel-card">
+                  <div className="panel-title">Client</div>
+                  <div className="panel-sub">{selectedFile.clientFinal || "—"}</div>
+                  <div style={{ height: 10 }} />
+                  <div className="panel-title">Adresse</div>
+                  <div className="panel-sub">{selectedFile.address || "—"}</div>
+                </div>
+                <div className="panel-card">
+                  <div className="panel-title">Statut</div>
+                  <div className="panel-sub">{selectedFile.statutGlobal || selectedFile.status || "—"}</div>
+                  <div style={{ height: 10 }} />
+                  <div className="panel-title">Pack</div>
+                  <div className="panel-sub">{selectedFile.pack || "—"}</div>
+                  <div style={{ height: 12 }} />
+                  <div className="panel-title">Mettre à jour le statut</div>
+                  <div className="filters" style={{ marginTop: 6 }}>
+                    <select value={statusDraft} onChange={(e) => setStatusDraft(e.target.value)} aria-label="Statut dossier">
+                      <option value="">—</option>
+                      <option value="en_cours">En cours</option>
+                      <option value="en_attente">En attente</option>
+                      <option value="incomplet">Incomplet</option>
+                      <option value="bloque">Bloqué</option>
+                      <option value="finalise">Finalisé</option>
+                      <option value="clos">Clos</option>
+                    </select>
+                  </div>
+                  {statusInfo ? (
+                    <div className="empty-block" style={{ borderStyle: "solid", marginTop: 8 }}>
+                      {statusInfo}
+                    </div>
+                  ) : null}
+                  {statusError ? (
+                    <div className="empty-block" style={{ borderStyle: "solid", marginTop: 8 }}>
+                      {statusError}
+                    </div>
+                  ) : null}
+                  <div className="panel-foot" style={{ marginTop: 6 }}>
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      disabled={statusSaving || !statusDraft || !selectedFile}
+                      onClick={async () => {
+                        if (!selectedFile) return;
+                        setStatusInfo(null);
+                        setStatusError(null);
+                        setStatusSaving(true);
+                        try {
+                          await updateDoc(doc(db, "files", String(selectedFile.id)), {
+                            statutGlobal: statusDraft,
+                            status: statusDraft,
+                            updatedAt: new Date(),
+                          });
+                          setStatusInfo("Statut mis à jour.");
+                        } catch (e: any) {
+                          setStatusError(e?.message ?? "Impossible de mettre à jour le statut.");
+                        } finally {
+                          setStatusSaving(false);
+                        }
+                      }}
+                    >
+                      {statusSaving ? "Mise à jour…" : "Enregistrer le statut"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="panel-card" style={{ marginTop: 12 }}>
+                <div className="panel-title">Email client</div>
+                <div className="panel-sub">Lien automatique pour l’espace client.</div>
+                <div className="filters" style={{ marginTop: 8 }}>
+                  <input
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                    placeholder="email@client.fr"
+                    autoComplete="email"
+                  />
+                </div>
+                {clientEmailInfo ? (
+                  <div className="empty-block" style={{ borderStyle: "solid", marginTop: 8 }}>
+                    {clientEmailInfo}
+                  </div>
+                ) : null}
+                {clientEmailError ? (
+                  <div className="empty-block" style={{ borderStyle: "solid", marginTop: 8 }}>
+                    {clientEmailError}
+                  </div>
+                ) : null}
+                {sendInfo ? (
+                  <div className="empty-block" style={{ borderStyle: "solid", marginTop: 8 }}>
+                    {sendInfo}
+                  </div>
+                ) : null}
+                {sendError ? (
+                  <div className="empty-block" style={{ borderStyle: "solid", marginTop: 8 }}>
+                    {sendError}
+                  </div>
+                ) : null}
+                <div className="panel-foot" style={{ marginTop: 6 }}>
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    disabled={clientEmailSaving || !selectedFile}
+                    onClick={async () => {
+                      if (!selectedFile) return;
+                      setClientEmailInfo(null);
+                      setClientEmailError(null);
+                      const normalized = clientEmail.trim().toLowerCase();
+                      setClientEmailSaving(true);
+                      try {
+                        await updateDoc(doc(db, "files", String(selectedFile.id)), { clientEmail: normalized });
+                        setClientEmail(normalized);
+                        setClientEmailInfo("Email client enregistré.");
+                      } catch (e: any) {
+                        setClientEmailError(e?.message ?? "Impossible d’enregistrer l’email client.");
+                      } finally {
+                        setClientEmailSaving(false);
+                      }
+                    }}
+                  >
+                    {clientEmailSaving ? "Enregistrement…" : "Enregistrer"}
+                  </button>
+                  <button
+                    className="btn btn-pill"
+                    type="button"
+                    disabled={sendLoading || !clientEmail.trim()}
+                    onClick={async () => {
+                      const normalized = clientEmail.trim().toLowerCase();
+                      if (!normalized) {
+                        setSendError("Email client requis.");
+                        return;
+                      }
+                      setSendInfo(null);
+                      setSendError(null);
+                      setSendLoading(true);
+                      try {
+                        const callable = httpsCallable(getFunctions(app, "europe-west1"), "sendClientMagicLink");
+                        await callable({
+                          clientEmail: normalized,
+                          fileId: selectedFile?.id || null,
+                          reference: selectedFile?.reference || null,
+                        });
+                        setSendInfo("Lien envoyé au client.");
+                      } catch (e: any) {
+                        setSendError(e?.message ?? "Impossible d’envoyer le lien.");
+                      } finally {
+                        setSendLoading(false);
+                      }
+                    }}
+                  >
+                    {sendLoading ? "Envoi…" : "Envoyer lien client"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="hero">
             <div className="hero-left">
               <div className="hero-title">Vue d’ensemble</div>
@@ -240,7 +467,6 @@ export default function AdminDashboard() {
             </div>
             <div className="hero-right">
               <div className="chip chip-glow">Temps réel</div>
-              <div className="chip">Firestore</div>
               <div className="chip">Admin</div>
             </div>
           </div>
@@ -304,7 +530,7 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="filters">
-                  <select value={packFilter} onChange={(e) => setPackFilter(e.target.value)} aria-label="Filtre pack">
+                  <select value={packFilter} onChange={(e) => setPackFilter(e.target.value.toLowerCase())} aria-label="Filtre pack">
                     <option value="">Tous packs</option>
                     {PACKS.map((p: any) => (
                       <option key={p.value} value={String(p.value).toLowerCase()}>
@@ -351,7 +577,7 @@ export default function AdminDashboard() {
                       const nextDate = toDate(f.nextActionDate);
                       const upd = toDate(f.updatedAt || f.createdAt);
                       return (
-                        <tr key={f.id} className="clickable-row" onClick={() => navigate("/admin")} role="button">
+                        <tr key={f.id} className="clickable-row" onClick={() => openFile(String(f.id))} role="button">
                           <td>
                             <div className="cell-strong">{f.reference || "—"}</div>
                             <div className="cell-sub">{f.title || "Dossier"}</div>
