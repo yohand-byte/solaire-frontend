@@ -823,6 +823,11 @@ export default function App() {
   }
   const leads = Array.isArray(leadsResp?.items) ? leadsResp.items : [];
   const leadsTotal = typeof leadsResp?.total === 'number' ? leadsResp.total : 0;
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!leads?.length) return;
+    console.log("[leads] keys", Object.keys(leads[0] || {}));
+  }, [leads]);
   const leadsSortedByDate = useMemo(() => {
     return [...leads].sort((a, b) => {
       const da = tsToDate(a.createdAt)?.getTime() || 0;

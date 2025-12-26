@@ -46,6 +46,8 @@ export default function AdminDashboard() {
   const [packFilter, setPackFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<"dashboard" | "leads">("dashboard");
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
 
   const [params, setParams] = useSearchParams();
   const [quickFilter, setQuickFilter] = useState<"all" | "active" | "today" | "overdue">("all");
@@ -71,6 +73,15 @@ export default function AdminDashboard() {
   const loading = leadsLoading || filesLoading;
   const leads = (leadsData || []) as any[];
   const files = (filesData || []) as any[];
+  const leadsSorted = useMemo(() => {
+    return leads
+      .slice()
+      .sort((a: any, b: any) => {
+        const ad = toDate(a.updatedAt || a.createdAt) || new Date(0);
+        const bd = toDate(b.updatedAt || b.createdAt) || new Date(0);
+        return bd.getTime() - ad.getTime();
+      });
+  }, [leads]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -247,9 +258,32 @@ export default function AdminDashboard() {
             <div className="side-sub">Accès rapide</div>
           </div>
 
-          <button type="button" className="side-item side-item-active" onClick={() => navigate("/admin")}>
+          <button
+            type="button"
+            className={`side-item ${view === "dashboard" ? "side-item-active" : ""}`}
+            onClick={() => {
+              setView("dashboard");
+              setSelectedLead(null);
+              closeFile();
+              navigate("/admin");
+            }}
+          >
             <span className="side-ico">📊</span>
             Dashboard
+          </button>
+
+          <button
+            type="button"
+            className={`side-item ${view === "leads" ? "side-item-active" : ""}`}
+            onClick={() => {
+              setView("leads");
+              setSelectedLead(null);
+              closeFile();
+              navigate("/admin");
+            }}
+          >
+            <span className="side-ico">📋</span>
+            Leads
           </button>
 
           <button type="button" className="side-item" onClick={() => navigate("/admin/login")}>
@@ -292,6 +326,86 @@ export default function AdminDashboard() {
         </aside>
 
         <main className="main">
+          {view === "leads" ? (
+            <>
+              <div className="card" style={{ marginBottom: 12 }}>
+                <div className="card-head">
+                  <div>
+                    <div className="card-title">Leads</div>
+                    <div className="card-sub">{leadsSorted.length} lead(s)</div>
+                  </div>
+                </div>
+                <div className="table-wrapper">
+                  <table className="table sticky-head">
+                    <thead>
+                      <tr>
+                        <th>Nom</th>
+                        <th>Entreprise</th>
+                        <th>Email</th>
+                        <th>Téléphone</th>
+                        <th>Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leadsSorted.slice(0, 200).map((lead: any) => (
+                        <tr
+                          key={lead.id}
+                          className="clickable-row"
+                          onClick={() => setSelectedLead(lead)}
+                          role="button"
+                        >
+                          <td>{lead.name || lead.fullName || lead.profile || "—"}</td>
+                          <td>{lead.company || lead.companyName || lead.entreprise || lead.societe || "—"}</td>
+                          <td>{lead.email || "—"}</td>
+                          <td>{lead.phone || lead.téléphone || "—"}</td>
+                          <td>
+                            <span className={`tone ${statusTone(lead.status || "nouveau")}`}>
+                              {lead.status || "nouveau"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {leadsSorted.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="empty">
+                            Aucun lead.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {selectedLead ? (
+                <div className="card">
+                  <div className="card-head">
+                    <div>
+                      <div className="card-title">Fiche lead</div>
+                      <div className="card-sub">{selectedLead.id}</div>
+                    </div>
+                  </div>
+                  <div className="grid-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                    <div className="panel-card">
+                      <div className="panel-title">Nom</div>
+                      <div className="panel-sub">{selectedLead.name || selectedLead.fullName || selectedLead.profile || "—"}</div>
+                      <div style={{ height: 10 }} />
+                      <div className="panel-title">Entreprise</div>
+                      <div className="panel-sub">{selectedLead.company || selectedLead.companyName || selectedLead.entreprise || selectedLead.societe || "—"}</div>
+                    </div>
+                    <div className="panel-card">
+                      <div className="panel-title">Contact</div>
+                      <div className="panel-sub">{selectedLead.email || "—"}</div>
+                      <div className="panel-sub">{selectedLead.phone || selectedLead.téléphone || "—"}</div>
+                      <div style={{ height: 10 }} />
+                      <div className="panel-title">Statut</div>
+                      <div className="panel-sub">{selectedLead.status || "nouveau"}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
           {selectedFile ? (
             <div className="card" style={{ marginBottom: 12 }}>
               <div className="card-head">
@@ -705,6 +819,7 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
+          )}
         </main>
       </div>
     </div>
