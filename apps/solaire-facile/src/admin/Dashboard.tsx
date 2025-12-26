@@ -46,8 +46,10 @@ export default function AdminDashboard() {
   const [packFilter, setPackFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"dashboard" | "leads">("dashboard");
+  const [view, setView] = useState<"dashboard" | "leads" | "files">("dashboard");
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
+  const [todoToday, setTodoToday] = useState(false);
+  const [late, setLate] = useState(false);
 
   const [params, setParams] = useSearchParams();
   const [quickFilter, setQuickFilter] = useState<"all" | "active" | "today" | "overdue">("all");
@@ -156,15 +158,17 @@ export default function AdminDashboard() {
         if (packNeedle && pack !== packNeedle) return false;
         if (statusFilter && status !== statusFilter) return false;
 
-        if (quickFilter === "active") {
+        const activeQuick = todoToday ? "today" : late ? "overdue" : quickFilter;
+
+        if (activeQuick === "active") {
           if (status !== "en_cours") return false;
         }
-        if (quickFilter === "today") {
+        if (activeQuick === "today") {
           if (!next) return false;
           const t = next.getTime();
           if (t < today0 || t >= tomorrow0) return false;
         }
-        if (quickFilter === "overdue") {
+        if (activeQuick === "overdue") {
           if (!next) return false;
           if (["finalise", "clos"].includes(status)) return false;
           if (next.getTime() >= today0) return false;
@@ -264,6 +268,8 @@ export default function AdminDashboard() {
             onClick={() => {
               setView("dashboard");
               setSelectedLead(null);
+              setTodoToday(false);
+              setLate(false);
               closeFile();
               navigate("/admin");
             }}
@@ -278,6 +284,8 @@ export default function AdminDashboard() {
             onClick={() => {
               setView("leads");
               setSelectedLead(null);
+              setTodoToday(false);
+              setLate(false);
               closeFile();
               navigate("/admin");
             }}
@@ -294,22 +302,74 @@ export default function AdminDashboard() {
           <div className="side-sep" />
 
           <div className="side-kpis">
-            <button type="button" className="side-kpi" onClick={() => { setQuickFilter("all"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
+            <button
+              type="button"
+              className="side-kpi"
+              onClick={() => {
+                setView("files");
+                setQuickFilter("all");
+                setTodoToday(false);
+                setLate(false);
+                setPackFilter("");
+                setStatusFilter("");
+                setSearch("");
+                closeFile();
+              }}
+            >
               <span className="side-kpi-label">Dossiers</span>
               <span className="side-kpi-value">{stats.filesTotal}</span>
             </button>
 
-            <button type="button" className="side-kpi" onClick={() => { setQuickFilter("active"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
+            <button
+              type="button"
+              className="side-kpi"
+              onClick={() => {
+                setView("files");
+                setQuickFilter("all");
+                setTodoToday(false);
+                setLate(false);
+                setPackFilter("");
+                setStatusFilter("en_cours");
+                setSearch("");
+                closeFile();
+              }}
+            >
               <span className="side-kpi-label">En cours</span>
               <span className="side-kpi-value">{stats.filesActive}</span>
             </button>
 
-            <button type="button" className="side-kpi" onClick={() => { setQuickFilter("today"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
+            <button
+              type="button"
+              className="side-kpi"
+              onClick={() => {
+                setView("files");
+                setQuickFilter("all");
+                setTodoToday(true);
+                setLate(false);
+                setPackFilter("");
+                setStatusFilter("");
+                setSearch("");
+                closeFile();
+              }}
+            >
               <span className="side-kpi-label">À faire (jour)</span>
               <span className="side-kpi-value">{actionsToday.length}</span>
             </button>
 
-            <button type="button" className="side-kpi side-kpi-danger" onClick={() => { setQuickFilter("overdue"); setPackFilter(""); setStatusFilter(""); setSearch(""); closeFile(); }}>
+            <button
+              type="button"
+              className="side-kpi side-kpi-danger"
+              onClick={() => {
+                setView("files");
+                setQuickFilter("all");
+                setTodoToday(false);
+                setLate(true);
+                setPackFilter("");
+                setStatusFilter("");
+                setSearch("");
+                closeFile();
+              }}
+            >
               <span className="side-kpi-label">En retard</span>
               <span className="side-kpi-value">{overdue.length}</span>
             </button>
