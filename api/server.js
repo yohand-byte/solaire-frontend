@@ -130,7 +130,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.post("/api/leads", async (req, res) => {
+app.post(["/api/leads","/leads"], async (req, res) => {
   try {
     const { email, name, company, phone, cguAccepted, source, pack, packCode, packLabel, packPrice, price } = req.body || {};
     if (!email) return res.status(400).json({ error: "email required" });
