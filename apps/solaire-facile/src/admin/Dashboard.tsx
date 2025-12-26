@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth, db, app } from "../lib/firestore";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { PACKS } from "../constants";
 import { useCollection } from "../hooks/useCollection";
@@ -350,11 +350,17 @@ export default function AdminDashboard() {
                         setStatusInfo(null);
                         setStatusError(null);
                         setStatusSaving(true);
+                        const fileId = String(selectedFile?.id || selectedId || "").trim();
+                        if (!fileId) {
+                          setStatusError("Identifiant dossier manquant.");
+                          setStatusSaving(false);
+                          return;
+                        }
                         try {
-                          await updateDoc(doc(db, "files", String(selectedFile.id)), {
+                          await updateDoc(doc(db, "files", fileId), {
                             statutGlobal: statusDraft,
                             status: statusDraft,
-                            updatedAt: new Date(),
+                            updatedAt: serverTimestamp(),
                           });
                           setStatusInfo("Statut mis à jour.");
                         } catch (e: any) {

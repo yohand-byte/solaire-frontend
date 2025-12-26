@@ -52,7 +52,7 @@ const packPrice = (item) => {
   return "—";
 };
 const displayName = (item) => {
-  if (!item) return "—";
+  if (!item) return "";
   if (item.name) return item.name;
   if (item.fullName) return item.fullName;
   if (item.clientFinal) return item.clientFinal;
@@ -61,10 +61,10 @@ const displayName = (item) => {
   const first = item.firstName || item.firstname;
   const last = item.lastName || item.lastname;
   const joined = [first, last].filter(Boolean).join(" ");
-  return joined || "—";
+  return joined || "";
 };
 const displayCompany = (item) => {
-  if (!item) return "—";
+  if (!item) return "";
   return (
     item.company ||
     item.companyName ||
@@ -72,7 +72,7 @@ const displayCompany = (item) => {
     item.societe ||
     item.raisonSociale ||
     item.businessName ||
-    "—"
+    ""
   );
 };
 
@@ -163,7 +163,7 @@ function Kanban({ leads }) {
             .filter((l) => (l.status || '').toLowerCase() === col.key)
             .map((l) => (
               <div className="card-lead" key={l.id}>
-                <div><strong>{displayName(l)}</strong></div>
+                <div><strong>{displayName(l) || "—"}</strong></div>
                 <div className="small">{l.email || l.phone || '—'}</div>
               </div>
             ))}
@@ -193,8 +193,8 @@ function LeadsTable({ leads, onSelect }) {
         <tbody>
           {leads.map((l) => (
             <tr key={l.id} onClick={() => onSelect(l)} style={{ cursor: 'pointer' }}>
-              <td>{displayName(l)}</td>
-              <td>{displayCompany(l)}</td>
+              <td>{displayName(l) || "—"}</td>
+              <td>{displayCompany(l) || "—"}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
               <td>{packLabel(l)}</td>
@@ -243,8 +243,8 @@ function LeadDetail({ lead, clientsById }) {
   };
   return (
     <div className="card">
-      <h3>{displayName(lead)}</h3>
-      <div className="small">{displayCompany(lead)}</div>
+      <h3>{displayName(lead) || "—"}</h3>
+      <div className="small">{displayCompany(lead) || "—"}</div>
       <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
       <div className="small">Pack : {packLabel(lead)} · Prix : {packPrice(lead)} €</div>
       <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
@@ -324,8 +324,8 @@ function ClientDetail({ client, onCreatedFile, existingFiles = [] }) {
   };
   return (
     <div className="card">
-      <h3>{displayName(client)}</h3>
-      <div className="small">{displayCompany(client)}</div>
+      <h3>{displayName(client) || "—"}</h3>
+      <div className="small">{displayCompany(client) || "—"}</div>
       <div className="small">{client.email || '—'} · {client.phone || '—'}</div>
       <div className="pill" style={{ marginTop: 6 }}>{packLabel(client)} • {packPrice(client)} € • {client.segment || 'small'} • {client.status || 'actif'}</div>
       <div style={{ marginTop: 8 }}>
@@ -1009,7 +1009,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {todoToday.slice(0, 10).map((l) => (
                     <tr key={l.id}>
-                      <td>{displayCompany(l)}</td>
+                      <td>{displayCompany(l) || "—"}</td>
                       <td>{packLabel(l)}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
@@ -1054,8 +1054,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {latestLeads.map((l) => (
                     <tr key={l.id} className="clickable" onClick={() => { setTab('leads'); setSelected(l); }}>
-                      <td>{displayCompany(l)}</td>
-                      <td>{displayName(l)}</td>
+                      <td>{displayCompany(l) || "—"}</td>
+                      <td>{displayName(l) || "—"}</td>
                       <td>{packLabel(l)}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
@@ -1234,8 +1234,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                       onClick={() => setSelectedClient(c)}
                       style={{ cursor: "pointer" }}
                     >
-                      <td>{displayName(c)}</td>
-                      <td>{displayCompany(c)}</td>
+                      <td>{displayName(c) || "—"}</td>
+                      <td>{displayCompany(c) || "—"}</td>
                       <td>{c.email || "—"}</td>
                       <td>{c.phone || "—"}</td>
                       <td>{packLabel(c)}</td>
@@ -1486,8 +1486,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               <div className="modal-header">
                 <div>
                   <div className="pill soft">Client</div>
-                  <h3 style={{ margin: "6px 0 0" }}>{displayName(previewClient)}</h3>
-                  <div className="small">{displayCompany(previewClient)}</div>
+                  <h3 style={{ margin: "6px 0 0" }}>{displayName(previewClient) || "—"}</h3>
+                  <div className="small">{displayCompany(previewClient) || "—"}</div>
                   <div className="small">{previewClient.email || "—"} · {previewClient.phone || "—"}</div>
                 </div>
                 <button className="btn-icon" onClick={() => setPreviewClient(null)}>✕</button>
