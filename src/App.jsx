@@ -6,7 +6,6 @@ const API_BASE = (
 ).replace(/\/+$/, '');
 const API_TOKEN = 'saftoken-123';
 const API_AUTH_HEADERS = {
-  Authorization: `Bearer ${API_TOKEN}`,
   "X-Api-Token": API_TOKEN,
 };
 const formatDate = (ts) => {
