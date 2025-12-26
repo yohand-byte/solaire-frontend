@@ -33,8 +33,8 @@ export default function AppRouter() {
         />
 
         {/* Redirections par défaut */}
-        <Route path="/" element={<Navigate to="/client/login" replace />} />
-        <Route path="*" element={<Navigate to="/client/login" replace />} />
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
     </BrowserRouter>
   );
