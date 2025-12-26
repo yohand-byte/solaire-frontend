@@ -224,7 +224,7 @@ function Kanban({ leads }) {
   );
 }
 
-function LeadsTable({ leads, onSelect }) {
+function LeadsTable({ leads, onSelect, leadCompany, leadPack, leadPrice }) {
   return (
     <div className="card">
       <table className="table">
@@ -245,11 +245,11 @@ function LeadsTable({ leads, onSelect }) {
           {leads.map((l) => (
             <tr key={l.id} onClick={() => onSelect(l)} style={{ cursor: 'pointer' }}>
               <td>{displayName(l) || "—"}</td>
-              <td>{companyValue(l) || "—"}</td>
+              <td>{leadCompany ? leadCompany(l) : (companyValue(l) || "—")}</td>
               <td>{l.email || '—'}</td>
               <td>{l.phone || '—'}</td>
-              <td>{packValue(l) || "—"}</td>
-              <td>{priceValue(l) || "—"}</td>
+              <td>{leadPack ? leadPack(l) : (packValue(l) || "—")}</td>
+              <td>{leadPrice ? leadPrice(l) : (priceValue(l) || "—")}</td>
               <td>{formatDate(l.createdAt)}</td>
               <td><span className={`badge-status ${l.status || 'nouveau'}`}>{l.status || 'nouveau'}</span></td>
               <td>{l.source || 'webhook'}</td>
@@ -261,7 +261,7 @@ function LeadsTable({ leads, onSelect }) {
   );
 }
 
-function LeadDetail({ lead, clientsById }) {
+function LeadDetail({ lead, clientsById, leadCompany, leadPack, leadPrice }) {
   const { data: events, loading } = useFetch(lead ? `${API_BASE}/leads/${lead.id}/events` : null);
   const [converting, setConverting] = useState(false);
   if (!lead) return <div className="card">Sélectionne un lead</div>;
@@ -299,10 +299,13 @@ function LeadDetail({ lead, clientsById }) {
   return (
     <div className="card">
       <h3>{displayName(lead) || "—"}</h3>
-      <div className="small">{companyValue(lead) || "—"}</div>
+      <div className="small">{leadCompany ? leadCompany(lead) : (companyValue(lead) || "—")}</div>
       <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
       <div className="small">
-        Pack : {packValue(lead) || "—"} · Prix : {priceValue(lead) ? `${priceValue(lead)} €` : "—"}
+        Pack : {leadPack ? leadPack(lead) : (packValue(lead) || "—")} · Prix : {(() => {
+          const price = leadPrice ? leadPrice(lead) : (priceValue(lead) ? `${priceValue(lead)}` : "—");
+          return price === "—" ? "—" : `${price} €`;
+        })()}
       </div>
       <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
       <div className="badge" style={{ marginTop: 8 }}>{lead.status || 'nouveau'}</div>
@@ -736,6 +739,32 @@ export default function App() {
   const { data: clients } = useFetch(`${API_BASE}/clients`, [reloadKey]);
   const { data: filesResp } = useFetch(`${API_BASE}/files?limit=${filePageSize}&offset=${filePage * filePageSize}`, [reloadKey, filePage, filePageSize]);
   const { data: stats } = useFetch(`${API_BASE}/stats`, [reloadKey]);
+  const [clientsAll, setClientsAll] = useState([]);
+  const [filesAll, setFilesAll] = useState([]);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [clientsRes, filesRes] = await Promise.all([
+          fetch(`${API_BASE}/clients?limit=2000&offset=0`, { headers: API_AUTH_HEADERS }),
+          fetch(`${API_BASE}/files?limit=2000&offset=0`, { headers: API_AUTH_HEADERS }),
+        ]);
+        const clientsJson = await clientsRes.json();
+        const filesJson = await filesRes.json();
+        const nextClients = Array.isArray(clientsJson) ? clientsJson : (clientsJson.items ?? []);
+        const nextFiles = Array.isArray(filesJson) ? filesJson : (filesJson.items ?? []);
+        if (mounted) {
+          setClientsAll(nextClients);
+          setFilesAll(nextFiles);
+        }
+      } catch (_err) {
+        if (import.meta.env.DEV) {
+          console.log("clients/files fetch failed");
+        }
+      }
+    })();
+    return () => { mounted = false; };
+  }, [reloadKey]);
   useEffect(() => {
     const handler = () => setReloadKey((k) => k + 1);
     window.addEventListener('saf-reload', handler);
@@ -885,6 +914,40 @@ export default function App() {
     if (!leads?.length) return;
     console.log("[leads] keys", Object.keys(leads[0] || {}));
   }, [leads]);
+  const clientsByIdForLeads = useMemo(() => {
+    const map = {};
+    (clientsAll || []).forEach((c) => {
+      if (c?.id) map[c.id] = c;
+    });
+    return map;
+  }, [clientsAll]);
+  const latestFileByClientId = useMemo(() => {
+    const map = {};
+    (filesAll || []).forEach((f) => {
+      const clientId = f?.clientId;
+      if (!clientId) return;
+      const stamp = f?.updatedAt?._seconds ?? f?.updatedAt?.seconds ?? f?.createdAt?._seconds ?? f?.createdAt?.seconds ?? 0;
+      const current = map[clientId];
+      const currentStamp = current?.updatedAt?._seconds ?? current?.updatedAt?.seconds ?? current?.createdAt?._seconds ?? current?.createdAt?.seconds ?? 0;
+      if (!current || stamp > currentStamp) {
+        map[clientId] = f;
+      }
+    });
+    return map;
+  }, [filesAll]);
+  const leadCompany = (lead) => clientsByIdForLeads[lead?.clientId]?.company || "—";
+  const leadPack = (lead) => latestFileByClientId[lead?.clientId]?.pack || clientsByIdForLeads[lead?.clientId]?.pack || "—";
+  const leadPrice = (lead) => {
+    const price = latestFileByClientId[lead?.clientId]?.price;
+    return price !== undefined && price !== null && price !== "" ? price : "—";
+  };
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!leads?.length) return;
+    console.log("lead0", leads[0]);
+    console.log("client0", clientsByIdForLeads[leads[0]?.clientId]);
+    console.log("file0", latestFileByClientId[leads[0]?.clientId]);
+  }, [leads, clientsByIdForLeads, latestFileByClientId]);
   const leadsSortedByDate = useMemo(() => {
     return [...leads].sort((a, b) => {
       const da = tsToDate(a.createdAt)?.getTime() || 0;
@@ -1071,8 +1134,8 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {todoToday.slice(0, 10).map((l) => (
                     <tr key={l.id}>
-                      <td>{companyValue(l) || "—"}</td>
-                      <td>{packValue(l) || "—"}</td>
+                      <td>{leadCompany(l)}</td>
+                      <td>{leadPack(l)}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
                   ))}
@@ -1116,9 +1179,9 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                 <tbody>
                   {latestLeads.map((l) => (
                     <tr key={l.id} className="clickable" onClick={() => { setTab('leads'); setSelected(l); }}>
-                      <td>{companyValue(l) || "—"}</td>
+                      <td>{leadCompany(l)}</td>
                       <td>{displayName(l) || "—"}</td>
-                      <td>{packValue(l) || "—"}</td>
+                      <td>{leadPack(l)}</td>
                       <td>{formatDate(l.createdAt)}</td>
                     </tr>
                   ))}
@@ -1155,7 +1218,13 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                   {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}/page</option>)}
                 </select>
               </div>
-              <LeadsTable leads={filteredLeads} onSelect={setSelected} />
+              <LeadsTable
+                leads={filteredLeads}
+                onSelect={setSelected}
+                leadCompany={leadCompany}
+                leadPack={leadPack}
+                leadPrice={leadPrice}
+              />
               <div className="filters" style={{ justifyContent: "space-between" }}>
                 <button className="btn-secondary" disabled={leadPage === 0} onClick={() => setLeadPage((p) => Math.max(0, p - 1))}>Précédent</button>
                 <span>Page {leadPage + 1} / {Math.max(1, Math.ceil(leadsTotal / leadPageSize))} ({leadsTotal} leads)</span>
@@ -1169,7 +1238,13 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               <div className="small">Client ID : {selected.clientId}</div>
             </div>
           )}
-          <LeadDetail lead={selected} clientsById={clientsById} />
+          <LeadDetail
+            lead={selected}
+            clientsById={clientsById}
+            leadCompany={leadCompany}
+            leadPack={leadPack}
+            leadPrice={leadPrice}
+          />
         </div>
       )}
 
