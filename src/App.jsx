@@ -291,7 +291,9 @@ function LeadDetail({ lead, clientsById }) {
       <h3>{displayName(lead) || "—"}</h3>
       <div className="small">{companyValue(lead) || "—"}</div>
       <div className="small">{lead.email || '—'} · {lead.phone || '—'}</div>
-      <div className="small">Pack : {packValue(lead) || "—"} · Prix : {priceValue(lead) || "—"} €</div>
+      <div className="small">
+        Pack : {packValue(lead) || "—"} · Prix : {priceValue(lead) ? `${priceValue(lead)} €` : "—"}
+      </div>
       <div className="small">Créé le : {formatDate(lead.createdAt)}</div>
       <div className="badge" style={{ marginTop: 8 }}>{lead.status || 'nouveau'}</div>
       {linkedClientLabel && <div className="pill" style={{ marginTop: 6 }}>Client lié : {linkedClientLabel}</div>}
