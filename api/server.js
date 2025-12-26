@@ -14,6 +14,82 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
+const normalizeEmail = (email) => (email || "").trim().toLowerCase();
+const normalizePhone = (phone) => String(phone || "").replace(/\D/g, "");
+
+const findClient = async ({ emailLower, phoneNorm }) => {
+  const clients = db.collection("clients");
+  if (emailLower) {
+    const byEmailLower = await clients.where("emailLower", "==", emailLower).limit(1).get();
+    if (!byEmailLower.empty) return byEmailLower.docs[0];
+    const byEmail = await clients.where("email", "==", emailLower).limit(1).get();
+    if (!byEmail.empty) return byEmail.docs[0];
+  }
+  if (phoneNorm) {
+    const byPhoneNorm = await clients.where("phoneNorm", "==", phoneNorm).limit(1).get();
+    if (!byPhoneNorm.empty) return byPhoneNorm.docs[0];
+    const byPhone = await clients.where("phone", "==", phoneNorm).limit(1).get();
+    if (!byPhone.empty) return byPhone.docs[0];
+  }
+  return null;
+};
+
+const upsertClient = async ({ email, phone, company, pack, packCode, packLabel, packPrice }) => {
+  const emailLower = normalizeEmail(email);
+  const phoneNorm = normalizePhone(phone);
+  const snap = await findClient({ emailLower, phoneNorm });
+  const now = admin.firestore?.FieldValue?.serverTimestamp?.() || Date.now();
+  const payload = {
+    ...(email ? { email } : {}),
+    ...(emailLower ? { emailLower } : {}),
+    ...(phone ? { phone } : {}),
+    ...(phoneNorm ? { phoneNorm } : {}),
+    ...(company ? { company } : {}),
+    ...(pack ? { pack } : {}),
+    ...(packCode ? { packCode } : {}),
+    ...(packLabel ? { packLabel } : {}),
+    ...(packPrice !== undefined ? { packPrice, price: packPrice } : {}),
+    updatedAt: now,
+  };
+  if (!snap) {
+    const ref = db.collection("clients").doc();
+    await ref.set({ ...payload, createdAt: now });
+    return ref;
+  }
+  await snap.ref.set(payload, { merge: true });
+  return snap.ref;
+};
+
+const upsertFileForClient = async ({ clientId, clientEmail, pack, packCode, packLabel, packPrice }) => {
+  const hasPackInfo = pack || packCode || packLabel || packPrice !== undefined;
+  if (!clientId || !hasPackInfo) return null;
+  const now = admin.firestore?.FieldValue?.serverTimestamp?.() || Date.now();
+  const files = db.collection("files");
+  const existingSnap = await files.where("clientId", "==", clientId).orderBy("createdAt", "desc").limit(1).get();
+  const payload = {
+    ...(pack ? { pack } : {}),
+    ...(packCode ? { packCode } : {}),
+    ...(packLabel ? { packLabel } : {}),
+    ...(packPrice !== undefined ? { packPrice, price: packPrice } : {}),
+    ...(clientEmail ? { clientEmail } : {}),
+    updatedAt: now,
+  };
+  if (existingSnap.empty) {
+    const ref = files.doc();
+    await ref.set({
+      ...payload,
+      clientId,
+      status: "en_cours",
+      source: "landing",
+      createdAt: now,
+    });
+    return ref;
+  }
+  const ref = existingSnap.docs[0].ref;
+  await ref.set(payload, { merge: true });
+  return ref;
+};
+
 // CORS: Autoriser Firebase Hosting + localhost dev
 const allowedOrigins = [
   "https://solaire-frontend.web.app",
@@ -56,10 +132,30 @@ app.use((req, _res, next) => {
 
 app.post("/api/leads", async (req, res) => {
   try {
-    const { email, name, company, phone, cguAccepted, source } = req.body || {};
+    const { email, name, company, phone, cguAccepted, source, pack, packCode, packLabel, packPrice, price } = req.body || {};
     if (!email) return res.status(400).json({ error: "email required" });
     const now = admin.firestore?.FieldValue?.serverTimestamp?.() || Date.now();
     const normalizedSource = source === "landing" ? "landing" : "api";
+    const resolvedPack = pack || packCode || packLabel || "";
+    const resolvedPackPrice = packPrice ?? price;
+    const clientRef = await upsertClient({
+      email,
+      phone,
+      company,
+      pack: resolvedPack,
+      packCode: packCode || resolvedPack,
+      packLabel,
+      packPrice: resolvedPackPrice,
+    });
+    const clientId = clientRef.id;
+    await upsertFileForClient({
+      clientId,
+      clientEmail: normalizeEmail(email),
+      pack: resolvedPack,
+      packCode: packCode || resolvedPack,
+      packLabel,
+      packPrice: resolvedPackPrice,
+    });
     const ref = await db.collection("leads").add({
       email,
       name: name || "",
@@ -68,6 +164,11 @@ app.post("/api/leads", async (req, res) => {
       cguAccepted: !!cguAccepted,
       status: "new",
       source: normalizedSource,
+      clientId,
+      pack: resolvedPack || "",
+      packCode: packCode || resolvedPack || "",
+      packLabel: packLabel || "",
+      packPrice: resolvedPackPrice ?? "",
       createdAt: now,
     });
     res.json({ ok: true, id: ref.id });
