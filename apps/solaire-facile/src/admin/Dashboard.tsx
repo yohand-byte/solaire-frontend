@@ -306,6 +306,22 @@ export default function AdminDashboard() {
               type="button"
               className="side-kpi"
               onClick={() => {
+                setView("leads");
+                setSelectedLead(null);
+                setTodoToday(false);
+                setLate(false);
+                closeFile();
+                navigate("/admin");
+              }}
+            >
+              <span className="side-kpi-label">Leads</span>
+              <span className="side-kpi-value">{leads.length}</span>
+            </button>
+
+            <button
+              type="button"
+              className="side-kpi"
+              onClick={() => {
                 setView("files");
                 setQuickFilter("all");
                 setTodoToday(false);
