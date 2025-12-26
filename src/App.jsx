@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-const API_BASE = 'https://solaire-api-828508661560.europe-west1.run.app';
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 const API_TOKEN = 'saftoken-123';
 const formatDate = (ts) => {
   if (!ts) return "—";
