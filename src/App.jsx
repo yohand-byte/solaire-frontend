@@ -921,6 +921,23 @@ export default function App() {
     });
     return map;
   }, [clientsAll]);
+  const clientsByEmail = useMemo(() => {
+    const map = {};
+    (clientsAll || []).forEach((c) => {
+      const email = (c?.email || "").trim().toLowerCase();
+      if (email) map[email] = c;
+    });
+    return map;
+  }, [clientsAll]);
+  const clientsByPhone = useMemo(() => {
+    const map = {};
+    (clientsAll || []).forEach((c) => {
+      const phone = String(c?.phone || c?.telephone || c?.téléphone || "");
+      const norm = phone.replace(/\D/g, "");
+      if (norm) map[norm] = c;
+    });
+    return map;
+  }, [clientsAll]);
   const latestFileByClientId = useMemo(() => {
     const map = {};
     (filesAll || []).forEach((f) => {
@@ -935,10 +952,41 @@ export default function App() {
     });
     return map;
   }, [filesAll]);
-  const leadCompany = (lead) => clientsByIdForLeads[lead?.clientId]?.company || "—";
-  const leadPack = (lead) => latestFileByClientId[lead?.clientId]?.pack || clientsByIdForLeads[lead?.clientId]?.pack || "—";
+  const filesByClientEmail = useMemo(() => {
+    const map = {};
+    (filesAll || []).forEach((f) => {
+      const email = (f?.clientEmail || "").trim().toLowerCase();
+      if (!email) return;
+      const stamp = f?.updatedAt?._seconds ?? f?.updatedAt?.seconds ?? f?.createdAt?._seconds ?? f?.createdAt?.seconds ?? 0;
+      const current = map[email];
+      const currentStamp = current?.updatedAt?._seconds ?? current?.updatedAt?.seconds ?? current?.createdAt?._seconds ?? current?.createdAt?.seconds ?? 0;
+      if (!current || stamp > currentStamp) {
+        map[email] = f;
+      }
+    });
+    return map;
+  }, [filesAll]);
+  const resolveClientForLead = (lead) => {
+    if (!lead) return null;
+    const byId = lead.clientId ? clientsByIdForLeads[lead.clientId] : null;
+    if (byId) return byId;
+    const email = (lead.email || "").trim().toLowerCase();
+    if (email && clientsByEmail[email]) return clientsByEmail[email];
+    const phone = String(lead.phone || lead.telephone || lead.téléphone || "");
+    const phoneNorm = phone.replace(/\D/g, "");
+    if (phoneNorm && clientsByPhone[phoneNorm]) return clientsByPhone[phoneNorm];
+    return null;
+  };
+  const leadCompany = (lead) => resolveClientForLead(lead)?.company || "—";
+  const leadPack = (lead) => {
+    const client = resolveClientForLead(lead);
+    if (!client) return "—";
+    return latestFileByClientId[client.id]?.pack || client.pack || "—";
+  };
   const leadPrice = (lead) => {
-    const price = latestFileByClientId[lead?.clientId]?.price;
+    const client = resolveClientForLead(lead);
+    if (!client) return "—";
+    const price = latestFileByClientId[client.id]?.price;
     return price !== undefined && price !== null && price !== "" ? price : "—";
   };
   useEffect(() => {
