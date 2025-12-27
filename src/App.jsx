@@ -67,7 +67,7 @@ const displayName = (item) => {
   const first = item.firstName || item.firstname;
   const last = item.lastName || item.lastname;
   const joined = [first, last].filter(Boolean).join(" ");
-  return joined || "";
+  return joined || displayCompany(item) || "";
 };
 const displayCompany = (item) => {
   if (!item) return "";
@@ -442,23 +442,57 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
     } catch (_e) { /* ignore storage quota */ }
   };
 
+  // Génère un aperçu de la première page d'un PDF
+  const generatePdfPreview = async (dataUrl) => {
+    try {
+      if (!window.pdfjsLib || !dataUrl) return "";
+      const base64 = dataUrl.split(",")[1];
+      if (!base64) return "";
+      const binary = atob(base64);
+      const pdfData = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        pdfData[i] = binary.charCodeAt(i);
+      }
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      const pdf = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
+      const page = await pdf.getPage(1);
+      const scale = 0.5;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d");
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      return canvas.toDataURL("image/png");
+    } catch (err) {
+      console.error("PDF preview error:", err);
+      return "";
+    }
+  };
+
   const handleUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setUploading(true);
     const mapped = await Promise.all(files.map((f) => new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        preview: reader.result || "",
-        openUrl: reader.result || "",
-        file: f,
-      });
+      reader.onload = async () => {
+        const dataUrl = reader.result || "";
+        let preview = dataUrl;
+        if (f.type === "application/pdf") {
+          preview = await generatePdfPreview(dataUrl) || "";
+        }
+        resolve({
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          preview,
+          openUrl: dataUrl,
+          file: f,
+        });
+      };
       reader.readAsDataURL(f);
     })));
-    // stockage local uniquement (l’API n’expose pas encore /attachments)
     const nextLocal = {
       ...attachments,
       [file.id]: [
@@ -680,24 +714,44 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
         <input type="file" accept="image/png,image/jpeg,application/pdf" multiple onChange={handleUpload} />
         {uploading && <div className="small">Upload en cours...</div>}
         <div className="thumbs">
-          {fileAttachments.map((att, idx) => (
-            <div className="thumb" key={`${att.name}-${idx}`}>
-              <button
-                className="thumb-btn"
-                type="button"
-                onClick={() => openAttachment(att, idx)}
-                title="Ouvrir"
-              >
-                {att.type?.includes("pdf") ? (
-                  <div className="thumb-pdf">PDF</div>
-                ) : (
-                  <img src={att.preview || att.url || att.openUrl} alt={att.name} />
-                )}
-              </button>
-              <div className="thumb-name" title={att.name}>{att.name}</div>
-              <button className="btn-icon del" style={{ marginTop: 6 }} onClick={() => removeAtt(idx)}>Supprimer</button>
-            </div>
-          ))}
+          {fileAttachments.map((att, idx) => {
+            const lowerName = (att.name || "").toLowerCase();
+            const isPdf = (att.type || "").includes("pdf")
+              || lowerName.endsWith(".pdf")
+              || (att.openUrl || "").startsWith("data:application/pdf")
+              || (att.url || "").toLowerCase().includes(".pdf");
+            const previewSrc = att.preview || att.url || att.openUrl;
+            const hasImagePreview = (att.preview || "").startsWith("data:image");
+            const pdfSrc = att.openUrl || att.url || att.preview;
+            return (
+              <div className="thumb" key={`${att.name}-${idx}`}>
+                <button
+                  className="thumb-btn"
+                  type="button"
+                  onClick={() => openAttachment(att, idx)}
+                  title="Ouvrir"
+                >
+                  {isPdf ? (
+                    hasImagePreview ? (
+                      <img src={att.preview} alt={att.name} className="thumb-pdf-img" />
+                    ) : pdfSrc ? (
+                      <embed
+                        src={`${pdfSrc}#toolbar=0`}
+                        type="application/pdf"
+                        className="thumb-pdf-embed"
+                      />
+                    ) : (
+                      <div className="thumb-pdf">PDF</div>
+                    )
+                  ) : (
+                    <img src={previewSrc} alt={att.name} />
+                  )}
+                </button>
+                <div className="thumb-name" title={att.name}>{att.name}</div>
+                <button className="btn-icon del" style={{ marginTop: 6 }} onClick={() => removeAtt(idx)}>Supprimer</button>
+              </div>
+            );
+          })}
           {!fileAttachments.length && <div className="small">Glisse-dépose ou choisis un PDF/JPG/PNG.</div>}
         </div>
       </div>
@@ -777,6 +831,7 @@ export default function App() {
   const [leadFilters, setLeadFilters] = useState({ status: "", source: "", search: "" });
   const [fileFilters, setFileFilters] = useState({ status: "", pack: "", client: "" });
   const [clientFilters, setClientFilters] = useState({ search: "", pack: "", segment: "" });
+  const [clientSortOrder, setClientSortOrder] = useState("desc");
   const [previewClient, setPreviewClient] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", volume: "", packCode: "ESSENTIEL", packLabel: "Essentiel", packPrice: 169, flexItems: [], status: "nouveau", source: "landing" });
@@ -813,7 +868,7 @@ export default function App() {
   };
   const createFileForClient = async (client) => {
     if (!client?.id || creatingFileForClient) return;
-    const already = (files || []).some((f) => f.clientId === client.id && !["finalise", "clos"].includes((f.status || "").toLowerCase()));
+    const already = (files?.items || files || []).some((f) => f.clientId === client.id && !["finalise", "clos"].includes((f.status || "").toLowerCase()));
     if (already) {
       alert("Un dossier existe déjà pour ce client.");
       return;
@@ -977,17 +1032,17 @@ export default function App() {
     if (phoneNorm && clientsByPhone[phoneNorm]) return clientsByPhone[phoneNorm];
     return null;
   };
-  const leadCompany = (lead) => resolveClientForLead(lead)?.company || "—";
+  const leadCompany = (lead) => lead.company || resolveClientForLead(lead)?.company || "—";
   const leadPack = (lead) => {
     const client = resolveClientForLead(lead);
-    if (!client) return "—";
+    if (!client) return lead.pack || lead.packCode || "—";
     return latestFileByClientId[client.id]?.pack || client.pack || "—";
   };
   const leadPrice = (lead) => {
     const client = resolveClientForLead(lead);
-    if (!client) return "—";
+    if (!client) return lead.packPrice || "—";
     const price = latestFileByClientId[client.id]?.price;
-    return price !== undefined && price !== null && price !== "" ? price : "—";
+    return price !== undefined && price !== null && price !== "" ? price : (client.packPrice || lead.packPrice || "—");
   };
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -1016,7 +1071,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
   );
   const clientsById = useMemo(() => {
     const map = {};
-    (clients || []).forEach((c) => { map[c.id] = c; });
+    (clients?.items || clients || []).forEach((c) => { map[c.id] = c; });
     return map;
   }, [clients]);
   const filteredLeads = useMemo(() => {
@@ -1034,18 +1089,19 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
   }, [ordered, leadFilters]);
 
   const filteredFiles = useMemo(() => {
-    return (files || []).filter((f) => {
+    return (files?.items || files || []).filter((f) => {
       const matchStatus = fileFilters.status ? (f.status || '').toLowerCase() === fileFilters.status : true;
       const packCode = (f.packCode || (typeof f.pack === "object" ? f.pack.code : f.pack) || '').toLowerCase();
       const matchPack = fileFilters.pack ? packCode === fileFilters.pack : true;
       const clientLabel = displayCompany(clientsById[f.clientId]) || displayName(clientsById[f.clientId]) || f.clientFinal || f.clientId || '';
       const matchClient = fileFilters.client ? clientLabel.toLowerCase().includes(fileFilters.client.toLowerCase()) : true;
       return matchStatus && matchPack && matchClient;
+    }).sort((a, b) => { const da = a.createdAt?._seconds || 0; const db = b.createdAt?._seconds || 0; return clientSortOrder === "desc" ? db - da : da - db;
     });
-  }, [files, fileFilters, clientsById]);
+  }, [files, fileFilters, clientsById, clientSortOrder]);
 
   const filteredClients = useMemo(() => {
-    return (clients || []).filter((c) => {
+    return (clients?.items || clients || []).filter((c) => {
       const q = clientFilters.search.toLowerCase();
       const matchSearch = q
         ? displayName(c).toLowerCase().includes(q) ||
@@ -1057,8 +1113,9 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
       const matchPack = clientFilters.pack ? cPackCode === clientFilters.pack : true;
       const matchSegment = clientFilters.segment ? (c.segment || '').toLowerCase() === clientFilters.segment : true;
       return matchSearch && matchPack && matchSegment;
+    }).sort((a, b) => { const da = a.createdAt?._seconds || 0; const db = b.createdAt?._seconds || 0; return clientSortOrder === "desc" ? db - da : da - db;
     });
-  }, [clients, clientFilters]);
+  }, [clients, clientFilters, clientSortOrder]);
 
   const pipelineCounts = useMemo(() => {
     const counts = { nouveau: 0, contacte: 0, qualifie: 0, converti: 0 };
@@ -1405,7 +1462,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                     <th>Téléphone</th>
                   <th>Pack</th>
                   <th>Prix €</th>
-                  <th>Date</th>
+                  <th style={{cursor:"pointer"}} onClick={() => setClientSortOrder(o => o === "desc" ? "asc" : "desc")}>Date {clientSortOrder === "desc" ? "↓" : "↑"}</th>
                   <th>Segment</th>
                   <th>Statut</th>
                   <th style={{ width: 190 }}>Actions</th>
@@ -1459,7 +1516,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
           </div>
           <ClientDetail
             client={selectedClient}
-            existingFiles={(files || []).filter((f) => f.clientId === (selectedClient?.id || ""))}
+            existingFiles={(files?.items || files || []).filter((f) => f.clientId === (selectedClient?.id || ""))}
             onCreatedFile={() => setReloadKey((k) => k + 1)}
           />
           <div className="card">
@@ -1529,7 +1586,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
                     <th>Statut</th>
                     <th>Pack</th>
                     <th>Prix</th>
-                    <th>Date</th>
+                    <th style={{cursor:"pointer"}} onClick={() => setClientSortOrder(o => o === "desc" ? "asc" : "desc")}>Date {clientSortOrder === "desc" ? "↓" : "↑"}</th>
                     <th style={{ width: 160 }}>Actions</th>
                   </tr>
                 </thead>
@@ -1595,7 +1652,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
             <form onSubmit={async (e) => {
               e.preventDefault();
               if (fileForm.clientId) {
-                const exists = (files || []).some((f) => f.clientId === fileForm.clientId && f.id !== editingFileId && !["finalise", "clos"].includes((f.status || "").toLowerCase()));
+                const exists = (files?.items || files || []).some((f) => f.clientId === fileForm.clientId && f.id !== editingFileId && !["finalise", "clos"].includes((f.status || "").toLowerCase()));
                 if (exists) {
                   alert("Un dossier existe déjà pour ce client.");
                   return;

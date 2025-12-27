@@ -707,6 +707,19 @@ input:focus, select:focus, textarea:focus {
 .thumb img {
   width: 100%; height: 90px; object-fit: cover; border-radius: 8px; background: #e2e8f0;
 }
+.thumb img.thumb-pdf-img {
+  object-fit: contain;
+  background: #fff;
+}
+.thumb-pdf-embed {
+  width: 100%;
+  height: 90px;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  display: block;
+  pointer-events: none;
+}
 .thumb-pdf {
   height: 90px; border-radius: 8px;
   background: linear-gradient(135deg, #e11d48, #be123c);
