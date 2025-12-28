@@ -1,32 +1,110 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FolderKanban, Search, Plus, Filter, Grid3X3, List,
-  MapPin, Zap, Calendar, User, ChevronRight, X,
-  CheckCircle2, Clock, AlertCircle, FileText
+  FolderKanban, Search, Plus, MapPin, Zap, User, X,
+  CheckCircle2, Clock, AlertCircle, FileText, Edit, Calendar, 
+  Upload, ChevronDown, RotateCcw, ExternalLink, Trash2, Loader2
 } from 'lucide-react';
-import { Card, Button, Badge, Input, Select, EmptyState, Loading, Progress, WorkflowStep } from '../components/ui';
+import { Card, Button, Badge, Input, Select, EmptyState, Loading, Progress, Modal } from '../components/ui';
+import ProjectForm from '../components/forms/ProjectForm';
+
 import { clsx } from 'clsx';
 
-const WORKFLOW_STEPS = [
-  { key: 'dp', label: 'DP Mairie', color: 'amber' },
-  { key: 'consuel', label: 'Consuel', color: 'blue' },
-  { key: 'enedis', label: 'Enedis', color: 'purple' },
-  { key: 'edfOa', label: 'EDF OA', color: 'emerald' },
-];
+const API_BASE = import.meta.env.VITE_API_URL || "https://solaire-api-828508661560.europe-west1.run.app";
+const API_TOKEN = 'saftoken-123';
 
-const STATUS_CONFIG = {
-  pending: { label: 'En attente', color: 'default', icon: Clock },
-  in_progress: { label: 'En cours', color: 'warning', icon: Clock },
-  completed: { label: 'Finalisé', color: 'success', icon: CheckCircle2 },
-  blocked: { label: 'Bloqué', color: 'danger', icon: AlertCircle },
+const WORKFLOW_CONFIG = {
+  dp: {
+    label: "DP Mairie",
+    steps: [
+      { code: "pending", label: "Non démarré" },
+      { code: "draft", label: "En préparation" },
+      { code: "sent", label: "Dossier envoyé" },
+      { code: "receipt", label: "Récépissé reçu" },
+      { code: "instruction", label: "En instruction" },
+      { code: "approved", label: "Validé", final: true, success: true },
+      { code: "rejected", label: "Refusé", final: true, success: false }
+    ]
+  },
+  consuel: {
+    label: "Consuel",
+    steps: [
+      { code: "pending", label: "Non démarré" },
+      { code: "preparing", label: "Préparation dossier" },
+      { code: "submitted", label: "Déposé" },
+      { code: "waiting", label: "En attente retour" },
+      { code: "visit_scheduled", label: "Visite programmée" },
+      { code: "visit_done", label: "Visite effectuée" },
+      { code: "attestation_approved", label: "Attestation visée", final: true, success: true },
+      { code: "attestation_rejected", label: "Attestation non visée", final: true, success: false }
+    ]
+  },
+  enedis: {
+    label: "Enedis",
+    steps: [
+      { code: "pending", label: "Non démarré" },
+      { code: "request_sent", label: "Demande raccordement envoyée" },
+      { code: "request_approved", label: "Demande raccordement validée" },
+      { code: "mes_scheduled", label: "MES programmée" },
+      { code: "mes_done", label: "MES effectuée", final: true, success: true }
+    ]
+  },
+  edfOa: {
+    label: "EDF OA",
+    steps: [
+      { code: "pending", label: "Non démarré" },
+      { code: "account_created", label: "Compte producteur créé" },
+      { code: "bta_received", label: "Numéro BTA reçu" },
+      { code: "s21_sent", label: "Attestation S21 envoyée" },
+      { code: "s21_signed", label: "Contrat S21 signé" },
+      { code: "contract_received", label: "Contrat EDF OA reçu" },
+      { code: "contract_signed", label: "Contrat EDF OA signé", final: true, success: true }
+    ]
+  }
 };
 
-export default function Projects({ data, loading, onSelect }) {
+const STAGES = ['dp', 'consuel', 'enedis', 'edfOa'];
+
+const getStepInfo = (stage, stepCode) => {
+  const config = WORKFLOW_CONFIG[stage];
+  return config?.steps.find(s => s.code === stepCode) || { code: stepCode, label: stepCode };
+};
+
+const getStepIndex = (stage, stepCode) => {
+  const config = WORKFLOW_CONFIG[stage];
+  return config?.steps.findIndex(s => s.code === stepCode) || 0;
+};
+
+const getStageColor = (stage, currentStep) => {
+  const stepInfo = getStepInfo(stage, currentStep);
+  if (stepInfo.final && stepInfo.success) return 'success';
+  if (stepInfo.final && !stepInfo.success) return 'danger';
+  if (currentStep !== 'pending') return 'warning';
+  return 'default';
+};
+
+const formatDate = (d) => {
+  if (!d) return null;
+  const date = d._seconds ? new Date(d._seconds * 1000) : new Date(d);
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+export default function Projects({ data, loading, onCreateProject, onUpdateProject, onUpdateWorkflow, installers = [], installerFilter, onClearFilter }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('grid'); // grid | kanban
   const [selectedProject, setSelectedProject] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [creating, setCreating] = useState(false);
 
   const projects = data?.items || [];
 
@@ -40,122 +118,102 @@ export default function Projects({ data, loading, onSelect }) {
     });
   }, [projects, searchTerm, statusFilter]);
 
-  // Group by workflow step for Kanban
-  const kanbanColumns = useMemo(() => {
-    const columns = {
-      dp: { title: 'DP Mairie', items: [], color: 'amber' },
-      consuel: { title: 'Consuel', items: [], color: 'blue' },
-      enedis: { title: 'Enedis', items: [], color: 'purple' },
-      edfOa: { title: 'EDF OA', items: [], color: 'emerald' },
-      completed: { title: 'Finalisé', items: [], color: 'green' },
-    };
+  const handleCreate = async (formData) => {
+    setCreating(true);
+    try {
+      await onCreateProject?.(formData);
+      setShowCreateModal(false);
+    } finally {
+      setCreating(false);
+    }
+  };
 
-    filtered.forEach(project => {
-      if (project.status === 'completed') {
-        columns.completed.items.push(project);
-      } else {
-        // Find current step
-        const workflow = project.workflow || {};
-        let currentStep = 'dp';
-        for (const step of WORKFLOW_STEPS) {
-          if (workflow[step.key]?.status === 'in_progress') {
-            currentStep = step.key;
-            break;
-          }
-          if (workflow[step.key]?.status !== 'completed') {
-            currentStep = step.key;
-            break;
-          }
-        }
-        columns[currentStep]?.items.push(project);
-      }
-    });
+  const handleEdit = (project) => {
+    setEditingProject(project);
+    setShowEditModal(true);
+  };
 
-    return columns;
-  }, [filtered]);
+  const handleUpdate = async (formData) => {
+    setCreating(true);
+    try {
+      await onUpdateProject?.(editingProject.id, formData);
+      setShowEditModal(false);
+      setEditingProject(null);
+      setSelectedProject(null);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProject) {
+      const updated = projects.find(p => p.id === selectedProject.id);
+      if (updated) setSelectedProject(updated);
+    }
+  }, [projects]);
 
   if (loading) return <Loading text="Chargement des projets..." />;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Projets</h1>
           <p className="mt-1 text-gray-500">{filtered.length} projet(s)</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center bg-gray-100 rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={clsx(
-                'p-2 rounded-lg transition-colors',
-                viewMode === 'grid' ? 'bg-white shadow text-primary-600' : 'text-gray-500'
-              )}
-            >
-              <Grid3X3 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={clsx(
-                'p-2 rounded-lg transition-colors',
-                viewMode === 'kanban' ? 'bg-white shadow text-primary-600' : 'text-gray-500'
-              )}
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
-          <Button variant="solar" icon={Plus}>
-            Nouveau projet
-          </Button>
-        </div>
+        <Button variant="solar" icon={Plus} onClick={() => setShowCreateModal(true)}>Nouveau projet</Button>
       </div>
 
-      {/* Filters */}
+      {installerFilter && (
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <div className="flex items-center justify-between">
+            <p className="text-blue-800">🔍 Filtré par installateur</p>
+            <Button variant="ghost" size="sm" onClick={onClearFilter}>✕ Retirer le filtre</Button>
+          </div>
+        </Card>
+      )}
+
       <Card className="p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
-            <Input
-              placeholder="Rechercher par référence, client..."
-              icon={Search}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+            <Input placeholder="Rechercher..." icon={Search} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            options={[
-              { value: 'all', label: 'Tous les statuts' },
-              { value: 'in_progress', label: 'En cours' },
-              { value: 'blocked', label: 'Bloqué' },
-              { value: 'completed', label: 'Finalisé' },
-            ]}
-            className="w-full sm:w-48"
-          />
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} options={[
+            { value: 'all', label: 'Tous' },
+            { value: 'in_progress', label: 'En cours' },
+            { value: 'blocked', label: 'Bloqué' },
+            { value: 'completed', label: 'Finalisé' },
+          ]} className="w-full sm:w-40" />
         </div>
       </Card>
 
-      {/* Content */}
       {filtered.length === 0 ? (
-        <EmptyState
-          icon={FolderKanban}
-          title="Aucun projet"
-          description="Créez votre premier projet pour commencer"
-          action={<Button variant="solar" icon={Plus}>Créer un projet</Button>}
-        />
-      ) : viewMode === 'kanban' ? (
-        <KanbanView columns={kanbanColumns} onSelect={setSelectedProject} />
+        <EmptyState icon={FolderKanban} title="Aucun projet" action={<Button variant="solar" icon={Plus} onClick={() => setShowCreateModal(true)}>Créer</Button>} />
       ) : (
-        <GridView projects={filtered} onSelect={setSelectedProject} />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filtered.map((project, idx) => (
+            <ProjectCard key={project.id} project={project} index={idx} onClick={() => setSelectedProject(project)} onEdit={() => handleEdit(project)} />
+          ))}
+        </div>
       )}
 
-      {/* Detail Drawer */}
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Nouveau projet" size="lg">
+        <ProjectForm onSubmit={handleCreate} onCancel={() => setShowCreateModal(false)} loading={creating} installers={installers} />
+      </Modal>
+
+      <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditingProject(null); }} title="Modifier le projet" size="lg">
+        {editingProject && (
+          <ProjectForm onSubmit={handleUpdate} onCancel={() => { setShowEditModal(false); setEditingProject(null); }} loading={creating} installers={installers} initialData={editingProject} isEdit />
+        )}
+      </Modal>
+
       <AnimatePresence>
         {selectedProject && (
-          <ProjectDrawer
-            project={selectedProject}
-            onClose={() => setSelectedProject(null)}
+          <ProjectDrawer 
+            project={selectedProject} 
+            onClose={() => setSelectedProject(null)} 
+            onUpdateWorkflow={onUpdateWorkflow} 
+            onEdit={() => handleEdit(selectedProject)} 
           />
         )}
       </AnimatePresence>
@@ -163,265 +221,374 @@ export default function Projects({ data, loading, onSelect }) {
   );
 }
 
-function GridView({ projects, onSelect }) {
+function ProjectCard({ project, index, onClick, onEdit }) {
+  const workflow = project.workflow || {};
+  
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      {projects.map((project, idx) => (
-        <ProjectCard key={project.id} project={project} index={idx} onClick={() => onSelect(project)} />
-      ))}
-    </div>
-  );
-}
-
-function KanbanView({ columns, onSelect }) {
-  return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {Object.entries(columns).map(([key, column]) => (
-        <div key={key} className="flex-shrink-0 w-80">
-          <div className={clsx(
-            'flex items-center gap-2 px-4 py-3 rounded-t-xl',
-            `bg-${column.color}-100`
-          )}>
-            <span className={`w-3 h-3 rounded-full bg-${column.color}-500`} />
-            <h3 className="font-semibold text-gray-900">{column.title}</h3>
-            <Badge variant="default" size="sm">{column.items.length}</Badge>
-          </div>
-          <div className="bg-gray-50 rounded-b-xl p-3 min-h-96 space-y-3">
-            {column.items.map((project, idx) => (
-              <motion.div
-                key={project.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-              >
-                <Card 
-                  hover 
-                  className="p-4 cursor-pointer"
-                  onClick={() => onSelect(project)}
-                >
-                  <div className="flex items-start justify-between">
-                    <span className="text-sm font-medium text-primary-600">{project.reference}</span>
-                    <Badge variant={STATUS_CONFIG[project.status]?.color || 'default'} size="sm">
-                      {project.progress || 0}%
-                    </Badge>
-                  </div>
-                  <h4 className="mt-2 font-medium text-gray-900 truncate">
-                    {project.beneficiary?.lastName || 'Client'}
-                  </h4>
-                  <p className="text-sm text-gray-500 truncate">
-                    {project.beneficiary?.address?.city || 'Ville'}
-                  </p>
-                  <Progress value={project.progress || 0} size="sm" className="mt-3" variant="solar" />
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ProjectCard({ project, index, onClick }) {
-  const statusConfig = STATUS_CONFIG[project.status] || STATUS_CONFIG.in_progress;
-  const StatusIcon = statusConfig.icon;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-    >
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
       <Card hover className="p-6" onClick={onClick}>
         <div className="flex items-start justify-between">
           <div>
-            <span className="text-sm font-medium text-primary-600">{project.reference}</span>
-            <h3 className="mt-1 text-lg font-semibold text-gray-900">
-              {project.beneficiary?.firstName} {project.beneficiary?.lastName}
-            </h3>
+            <span className="text-sm font-medium text-blue-600">{project.reference}</span>
+            <h3 className="mt-1 text-lg font-semibold">{project.beneficiary?.firstName} {project.beneficiary?.lastName}</h3>
           </div>
-          <Badge variant={statusConfig.color} dot>
-            {statusConfig.label}
-          </Badge>
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+            <Edit className="w-4 h-4" />
+          </Button>
         </div>
 
         <div className="mt-4 space-y-2">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <MapPin className="w-4 h-4 text-gray-400" />
-            <span className="truncate">
-              {project.beneficiary?.address?.city || 'Adresse non renseignée'}
-            </span>
+            <span className="truncate">{project.beneficiary?.address?.city || 'Ville non renseignée'}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Zap className="w-4 h-4 text-gray-400" />
-            <span>{project.installation?.power || 0} kWc</span>
+            <span>{project.installation?.power || 0} kWc - {project.installation?.panelsCount || 0} panneaux</span>
           </div>
+          <Badge variant={project.installation?.raccordementType === 'surplus' ? 'primary' : 'solar'} size="sm">
+            {project.installation?.raccordementType === 'surplus' ? 'Autoconso surplus' : 'Revente totale'}
+          </Badge>
         </div>
 
         <div className="mt-4">
           <div className="flex items-center justify-between text-sm mb-2">
             <span className="text-gray-500">Progression</span>
-            <span className="font-medium text-gray-900">{project.progress || 0}%</span>
+            <span className="font-medium">{project.progress || 0}%</span>
           </div>
           <Progress value={project.progress || 0} variant="solar" />
         </div>
 
-        {/* Mini workflow */}
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            {WORKFLOW_STEPS.map((step, idx) => {
-              const stepStatus = project.workflow?.[step.key]?.status || 'pending';
-              return (
-                <div key={step.key} className="flex items-center">
-                  <div className={clsx(
-                    'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
-                    stepStatus === 'completed' && 'bg-emerald-100 text-emerald-600',
-                    stepStatus === 'in_progress' && 'bg-amber-100 text-amber-600',
-                    stepStatus === 'pending' && 'bg-gray-100 text-gray-400',
-                    stepStatus === 'blocked' && 'bg-red-100 text-red-600',
-                  )}>
-                    {stepStatus === 'completed' ? '✓' : idx + 1}
-                  </div>
-                  {idx < WORKFLOW_STEPS.length - 1 && (
-                    <div className={clsx(
-                      'w-6 h-0.5 mx-1',
-                      stepStatus === 'completed' ? 'bg-emerald-300' : 'bg-gray-200'
-                    )} />
-                  )}
+        <div className="mt-4 pt-4 border-t grid grid-cols-4 gap-2">
+          {STAGES.map((stage) => {
+            const currentStep = workflow[stage]?.currentStep || workflow[stage]?.status || 'pending';
+            const color = getStageColor(stage, currentStep);
+            return (
+              <div key={stage} className="text-center">
+                <div className={clsx(
+                  'w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-bold mb-1',
+                  color === 'success' && 'bg-emerald-100 text-emerald-600',
+                  color === 'warning' && 'bg-amber-100 text-amber-600',
+                  color === 'danger' && 'bg-red-100 text-red-600',
+                  color === 'default' && 'bg-gray-100 text-gray-400',
+                )}>
+                  {color === 'success' ? '✓' : color === 'danger' ? '✗' : STAGES.indexOf(stage) + 1}
                 </div>
-              );
-            })}
-          </div>
+                <p className="text-[10px] text-gray-500 truncate">{WORKFLOW_CONFIG[stage].label}</p>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </motion.div>
   );
 }
 
-function ProjectDrawer({ project, onClose }) {
+function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
+  const [updating, setUpdating] = useState(null);
+  const [expandedStage, setExpandedStage] = useState(null);
+  const [documents, setDocuments] = useState({});
+  const [uploading, setUploading] = useState(null);
+  const [loadingDocs, setLoadingDocs] = useState(true);
   const workflow = project.workflow || {};
+
+  useEffect(() => {
+    loadDocuments();
+  }, [project.id]);
+
+  const loadDocuments = async () => {
+    setLoadingDocs(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/documents?projectId=${project.id}`, {
+        headers: { 'X-Api-Token': API_TOKEN }
+      });
+      const data = await res.json();
+      
+      const grouped = {};
+      STAGES.forEach(s => grouped[s] = []);
+      (data.items || []).forEach(doc => {
+        if (doc.stage && grouped[doc.stage]) {
+          grouped[doc.stage].push(doc);
+        }
+      });
+      setDocuments(grouped);
+    } catch (err) {
+      console.error('Error loading documents:', err);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  const handleStepChange = async (stage, newStep) => {
+    setUpdating(stage);
+    try {
+      await onUpdateWorkflow?.(project.id, stage, newStep);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  // Upload direct vers Firebase Storage
+  const handleUpload = async (stage, files) => {
+    if (!files.length) return;
+    setUploading(stage);
+    
+    try {
+      const formData = new FormData();
+      formData.append('projectId', project.id);
+      formData.append('stage', stage);
+      formData.append('category', stage);
+      
+      for (const file of files) {
+        formData.append('file', file);
+      }
+      
+      const res = await fetch(`${API_BASE}/api/documents/upload`, {
+        method: 'POST',
+        headers: { 'X-Api-Token': API_TOKEN },
+        body: formData
+      });
+      
+      const data = await res.json();
+      if (data.ok) {
+        await loadDocuments();
+      } else {
+        alert('Erreur: ' + (data.error || 'Upload échoué'));
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Erreur upload: ' + err.message);
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const handleDeleteDoc = async (docId) => {
+    if (!confirm('Supprimer ce document ?')) return;
+    try {
+      await fetch(`${API_BASE}/api/documents/${docId}`, {
+        method: 'DELETE',
+        headers: { 'X-Api-Token': API_TOKEN }
+      });
+      loadDocuments();
+    } catch (err) {
+      console.error('Delete error:', err);
+    }
+  };
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50"
-        onClick={onClose}
-      />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 overflow-y-auto"
-      >
-        <div className="sticky top-0 bg-white border-b border-gray-100 p-6 flex items-center justify-between">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50" onClick={onClose} />
+      <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25 }} className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between z-10">
           <div>
-            <span className="text-sm font-medium text-primary-600">{project.reference}</span>
-            <h2 className="text-xl font-bold text-gray-900">
-              {project.beneficiary?.firstName} {project.beneficiary?.lastName}
-            </h2>
+            <span className="text-sm font-medium text-blue-600">{project.reference}</span>
+            <h2 className="text-xl font-bold">{project.beneficiary?.firstName} {project.beneficiary?.lastName}</h2>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onEdit}><Edit className="w-4 h-4" /></Button>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+          </div>
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Progress */}
-          <Card className="p-6 bg-gradient-to-r from-solar-50 to-solar-100 border-solar-200">
+          <Card className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Progression globale</h3>
-              <span className="text-2xl font-bold text-solar-600">{project.progress || 0}%</span>
+              <h3 className="font-semibold">Progression globale</h3>
+              <span className="text-2xl font-bold text-amber-600">{project.progress || 0}%</span>
             </div>
             <Progress value={project.progress || 0} size="lg" variant="solar" />
           </Card>
 
-          {/* Workflow */}
+          <Badge variant={project.installation?.raccordementType === 'surplus' ? 'primary' : 'solar'}>
+            {project.installation?.raccordementType === 'surplus' ? '⚡ Autoconsommation avec surplus' : '💰 Revente totale'}
+          </Badge>
+
           <Card className="p-6">
-            <h3 className="font-semibold text-gray-900 mb-6">Étapes du workflow</h3>
-            <div className="space-y-4">
-              {WORKFLOW_STEPS.map((step, idx) => {
-                const stepData = workflow[step.key] || {};
-                const statusConfig = STATUS_CONFIG[stepData.status] || STATUS_CONFIG.pending;
-                const StatusIcon = statusConfig.icon;
+            <h3 className="font-semibold mb-4">Étapes du workflow</h3>
+            <div className="space-y-3">
+              {STAGES.map((stage) => {
+                const config = WORKFLOW_CONFIG[stage];
+                const stageData = workflow[stage] || {};
+                const currentStep = stageData.currentStep || stageData.status || 'pending';
+                const stepInfo = getStepInfo(stage, currentStep);
+                const stepIndex = getStepIndex(stage, currentStep);
+                const color = getStageColor(stage, currentStep);
+                const isExpanded = expandedStage === stage;
+                const stageDocs = documents[stage] || [];
                 
                 return (
-                  <div key={step.key} className="flex items-center gap-4">
-                    <div className={clsx(
-                      'w-10 h-10 rounded-xl flex items-center justify-center',
-                      stepData.status === 'completed' && 'bg-emerald-100',
-                      stepData.status === 'in_progress' && 'bg-amber-100',
-                      stepData.status === 'pending' && 'bg-gray-100',
-                      stepData.status === 'blocked' && 'bg-red-100',
-                    )}>
-                      <StatusIcon className={clsx(
-                        'w-5 h-5',
-                        stepData.status === 'completed' && 'text-emerald-600',
-                        stepData.status === 'in_progress' && 'text-amber-600',
-                        stepData.status === 'pending' && 'text-gray-400',
-                        stepData.status === 'blocked' && 'text-red-600',
-                      )} />
+                  <div key={stage} className={clsx(
+                    'rounded-xl border-2 transition-all overflow-hidden',
+                    color === 'success' && 'bg-emerald-50 border-emerald-200',
+                    color === 'warning' && 'bg-amber-50 border-amber-200',
+                    color === 'danger' && 'bg-red-50 border-red-200',
+                    color === 'default' && 'bg-gray-50 border-gray-200',
+                  )}>
+                    <div className="p-4 flex items-center gap-4 cursor-pointer" onClick={() => setExpandedStage(isExpanded ? null : stage)}>
+                      <div className={clsx(
+                        'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0',
+                        color === 'success' && 'bg-emerald-100',
+                        color === 'warning' && 'bg-amber-100',
+                        color === 'danger' && 'bg-red-100',
+                        color === 'default' && 'bg-gray-200',
+                      )}>
+                        {color === 'success' ? <CheckCircle2 className="w-6 h-6 text-emerald-600" /> :
+                         color === 'danger' ? <AlertCircle className="w-6 h-6 text-red-600" /> :
+                         color === 'warning' ? <Clock className="w-6 h-6 text-amber-600" /> :
+                         <Clock className="w-6 h-6 text-gray-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900">{config.label}</p>
+                        <p className="text-sm text-gray-600">{stepInfo.label}</p>
+                        {stageDocs.length > 0 && (
+                          <p className="text-xs text-blue-600 mt-1">📎 {stageDocs.length} document(s)</p>
+                        )}
+                      </div>
+                      <ChevronDown className={clsx('w-5 h-5 text-gray-400 transition-transform', isExpanded && 'rotate-180')} />
                     </div>
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{step.label}</p>
-                      <p className="text-sm text-gray-500">
-                        {stepData.status === 'completed' ? 'Terminé' : 
-                         stepData.status === 'in_progress' ? 'En cours' :
-                         stepData.status === 'blocked' ? 'Bloqué' : 'En attente'}
-                      </p>
-                    </div>
-                    <Badge variant={statusConfig.color} size="sm">
-                      {statusConfig.label}
-                    </Badge>
+
+                    {isExpanded && (
+                      <div className="px-4 pb-4 border-t border-gray-200/50 space-y-4">
+                        <div className="pt-4">
+                          <p className="text-sm font-medium text-gray-700 mb-3">Changer l'étape :</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {config.steps.map((step, idx) => {
+                              const isActive = step.code === currentStep;
+                              const isPast = idx < stepIndex;
+                              return (
+                                <button
+                                  key={step.code}
+                                  onClick={() => handleStepChange(stage, step.code)}
+                                  disabled={updating === stage}
+                                  className={clsx(
+                                    'p-2 rounded-lg text-sm font-medium text-left transition-all',
+                                    isActive && 'bg-blue-600 text-white',
+                                    !isActive && isPast && 'bg-emerald-100 text-emerald-700',
+                                    !isActive && !isPast && 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200',
+                                  )}
+                                >
+                                  {updating === stage ? '...' : (
+                                    <>
+                                      {isActive && '● '}
+                                      {isPast && !isActive && '✓ '}
+                                      {step.label}
+                                    </>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {currentStep !== 'pending' && (
+                            <button onClick={() => handleStepChange(stage, 'pending')} className="mt-3 flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+                              <RotateCcw className="w-4 h-4" /> Réinitialiser
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="pt-4 border-t">
+                          <p className="text-sm font-medium text-gray-700 mb-3">Documents :</p>
+                          {loadingDocs ? (
+                            <p className="text-sm text-gray-400">Chargement...</p>
+                          ) : stageDocs.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">Aucun document</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {stageDocs.map(doc => (
+                                <div key={doc.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border">
+                                  {doc.mimeType?.startsWith('image/') ? (
+                                    <img src={doc.url} className="w-10 h-10 object-cover rounded" />
+                                  ) : (
+                                    <FileText className="w-10 h-10 text-red-500 flex-shrink-0" />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{doc.filename}</p>
+                                    <p className="text-xs text-gray-500">{formatFileSize(doc.size)}</p>
+                                  </div>
+                                  <button onClick={() => window.open(doc.url, '_blank')} className="p-1.5 hover:bg-gray-100 rounded">
+                                    <ExternalLink className="w-4 h-4 text-gray-500" />
+                                  </button>
+                                  <button onClick={() => handleDeleteDoc(doc.id)} className="p-1.5 hover:bg-gray-100 rounded">
+                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          <StageUploadButton stage={stage} uploading={uploading} onUpload={handleUpload} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           </Card>
 
-          {/* Info */}
           <div className="grid grid-cols-2 gap-4">
             <Card className="p-4">
               <h4 className="text-sm font-medium text-gray-500 mb-2">Installation</h4>
-              <p className="text-lg font-bold text-gray-900">{project.installation?.power || 0} kWc</p>
+              <p className="text-lg font-bold">{project.installation?.power || 0} kWc</p>
               <p className="text-sm text-gray-500">{project.installation?.panelsCount || 0} panneaux</p>
             </Card>
             <Card className="p-4">
               <h4 className="text-sm font-medium text-gray-500 mb-2">Pack</h4>
-              <p className="text-lg font-bold text-gray-900">{project.pack}</p>
+              <p className="text-lg font-bold">{project.pack}</p>
               <p className="text-sm text-gray-500">{project.packPrice || 0}€</p>
             </Card>
           </div>
 
-          {/* Beneficiary */}
           <Card className="p-4">
-            <h4 className="font-semibold text-gray-900 mb-3">Bénéficiaire</h4>
+            <h4 className="font-semibold mb-3">Bénéficiaire</h4>
             <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-400" />
-                <span>{project.beneficiary?.firstName} {project.beneficiary?.lastName}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-gray-400" />
-                <span>{project.beneficiary?.address?.street}, {project.beneficiary?.address?.city}</span>
-              </div>
+              <div className="flex items-center gap-2"><User className="w-4 h-4 text-gray-400" />{project.beneficiary?.firstName} {project.beneficiary?.lastName}</div>
+              <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-gray-400" />{project.beneficiary?.address?.street}, {project.beneficiary?.address?.postalCode} {project.beneficiary?.address?.city}</div>
+              {project.beneficiary?.email && <div>📧 {project.beneficiary.email}</div>}
+              {project.beneficiary?.phone && <div>📞 {project.beneficiary.phone}</div>}
             </div>
           </Card>
 
-          {/* Actions */}
           <div className="flex gap-3">
-            <Button variant="primary" className="flex-1" icon={FileText}>
-              Générer documents
-            </Button>
-            <Button variant="secondary" className="flex-1">
-              Modifier
-            </Button>
+            <Button variant="primary" className="flex-1" icon={FileText}>Générer documents</Button>
           </div>
         </div>
       </motion.div>
+    </>
+  );
+}
+
+function StageUploadButton({ stage, uploading, onUpload }) {
+  const fileInputRef = useRef(null);
+  
+  const handleChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) {
+      onUpload(stage, files);
+    }
+    e.target.value = '';
+  };
+
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".pdf,.png,.jpg,.jpeg"
+        className="hidden"
+        onChange={handleChange}
+      />
+      <Button
+        variant="secondary"
+        size="sm"
+        className="mt-3 w-full"
+        icon={uploading === stage ? Loader2 : Upload}
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading === stage}
+      >
+        {uploading === stage ? 'Upload en cours...' : 'Ajouter un document'}
+      </Button>
     </>
   );
 }

@@ -1,5 +1,13 @@
 # Solaire Admin Facile CRM
 
+## Résumé des mises à jour (Codex + Yohan CRM Updates)
+- Portail Admin Firebase (/admin) branché sur l’API REST (projets, leads, installateurs, documents, workflow).
+- Détails projet Admin: workflow éditable, progression, documents (liste + upload + preview).
+- Détails lead Admin: lecture API + conversion et undo convert.
+- Portail Client (/client): magic link Firebase, dashboard installateur, suivi dossier en lecture seule.
+- CRM Cloud Run: notifications in-app, cloche active, mode sombre persistant, création projet depuis installateur.
+- Rollback: script `scripts/backup-admin-portal.sh` + guide `docs/ROLLBACK_ADMIN_PORTAL.md`.
+
 ## ✅ État actuel
 - Projet Vite/React + Firebase (Spark) hébergé sur `https://solaire-frontend.web.app`.
 - Auth Firebase (admin/client) avec Firestore rules propres (admin lecture/écriture, client lecture sur `files`).

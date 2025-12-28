@@ -7,5 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
+  },
+  "dependencies": {
+    "autoprefixer": "^10.4.23",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.26",
+    "lucide-react": "^0.562.0",
+    "postcss": "^8.5.6",
+    "recharts": "^3.6.0",
+    "tailwindcss": "^3.4.19"
   }
 }

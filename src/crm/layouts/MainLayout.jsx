@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import {
@@ -33,6 +33,53 @@ const secondaryNav = [
 export default function MainLayout({ children, currentPage, onNavigate, stats }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationPrefs, setNotificationPrefs] = useState({
+    newLead: true,
+    blockedProject: true,
+    reminders: true,
+    weeklyReport: true,
+  });
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    const STORAGE_KEY = 'sf_crm_notification_prefs';
+    const loadPrefs = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        setNotificationPrefs((prev) => ({ ...prev, ...parsed }));
+      } catch {}
+    };
+
+    loadPrefs();
+    const handlePrefsUpdate = () => loadPrefs();
+    window.addEventListener('sf-notification-prefs', handlePrefsUpdate);
+    window.addEventListener('storage', handlePrefsUpdate);
+    return () => {
+      window.removeEventListener('sf-notification-prefs', handlePrefsUpdate);
+      window.removeEventListener('storage', handlePrefsUpdate);
+    };
+  }, []);
+
+  const notifications = [];
+  if (notificationPrefs.newLead && stats?.newLeads > 0) {
+    notifications.push({
+      id: 'new-leads',
+      label: `${stats.newLeads} nouveau${stats.newLeads > 1 ? 'x' : ''} lead${stats.newLeads > 1 ? 's' : ''}`,
+      description: 'Consultez la liste des leads',
+      target: 'leads',
+    });
+  }
+  if (notificationPrefs.blockedProject && stats?.projectsBlocked > 0) {
+    notifications.push({
+      id: 'blocked-projects',
+      label: `${stats.projectsBlocked} projet${stats.projectsBlocked > 1 ? 's' : ''} bloqué${stats.projectsBlocked > 1 ? 's' : ''}`,
+      description: 'Voir les projets bloqués',
+      target: 'projects',
+    });
+  }
+  const hasNotifications = notifications.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -57,7 +104,7 @@ export default function MainLayout({ children, currentPage, onNavigate, stats })
         <div className="h-full bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col">
           {/* Logo */}
           <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 relative">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-solar-400 to-solar-500 flex items-center justify-center shadow-lg shadow-solar-500/30">
                 <Sun className="w-6 h-6 text-white" />
               </div>
@@ -165,10 +212,47 @@ export default function MainLayout({ children, currentPage, onNavigate, stats })
 
             <div className="flex items-center gap-3">
               {/* Notifications */}
-              <button className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
+              <button
+                className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
+                onClick={() => setNotificationsOpen((open) => !open)}
+              >
                 <Bell className="w-5 h-5 text-gray-500" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                {hasNotifications ? (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                ) : null}
               </button>
+              {notificationsOpen ? (
+                <div className="absolute right-4 top-14 w-80 bg-white border border-gray-200 rounded-2xl shadow-lg z-50">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <div className="text-sm font-semibold text-gray-900">Notifications</div>
+                    <button
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                      onClick={() => setNotificationsOpen(false)}
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-sm text-gray-500">Aucune notification.</div>
+                  ) : (
+                    <div className="divide-y">
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          className="w-full text-left px-4 py-3 hover:bg-gray-50"
+                          onClick={() => {
+                            onNavigate(notification.target);
+                            setNotificationsOpen(false);
+                          }}
+                        >
+                          <div className="text-sm font-medium text-gray-900">{notification.label}</div>
+                          <div className="text-xs text-gray-500">{notification.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {/* Quick stats */}
               <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-50 to-emerald-100 rounded-xl">

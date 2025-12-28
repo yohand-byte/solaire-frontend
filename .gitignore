@@ -65,6 +65,21 @@ dist/
 
 # dotenv environment variables file
 .env
+.env.local
+apps/solaire-facile/.env.local
 
 # dataconnect generated files
 .dataconnect
+
+# Local backups
+backups/
+
+# Local secrets
+secrets/
+api/firebase-service-account.json
+functions/env.yaml
+
+# Local backups / scratch
+api/server.js.backup
+api/server.js.bak*
+firebase.json.bak.*

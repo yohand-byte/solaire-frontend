@@ -1,14 +1,36 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firestore";
 import { PACKS } from "../constants";
-import { useCollection } from "../hooks/useCollection";
+
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  "https://solaire-api-828508661560.europe-west1.run.app"
+).replace(/\/+$/, "");
+const API_TOKEN = "saftoken-123";
+
+const fetchJson = async (path: string, options: RequestInit = {}) => {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      "X-Api-Token": API_TOKEN,
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+};
 
 const toDate = (value: any) => {
   if (!value) return null;
   if (value.toDate) return value.toDate();
-  if (value.seconds) return new Date(value.seconds * 1000);
+  if (value.seconds || value._seconds) return new Date((value.seconds || value._seconds) * 1000);
   return new Date(value);
 };
 
@@ -18,28 +40,80 @@ const todayKey = () => {
   return now.getTime();
 };
 
-const statusClass = (status = "") => {
-  const normalized = status.toLowerCase();
-  if (normalized === "en_cours") return "badge-status info";
-  if (normalized === "en_attente" || normalized === "incomplet") return "badge-status warning";
-  if (normalized === "finalise" || normalized === "clos") return "badge-status success";
-  if (normalized === "bloque") return "badge-status warning";
-  return "badge-status";
+const packClass = (pack = "") => `badge-pack badge-pack-${pack.replace(/[^a-z0-9]/gi, "_")}`;
+
+const workflowStages = ["dp", "consuel", "enedis", "edfOa"] as const;
+
+const workflowStatus = (project: any, stage: string, config: any) => {
+  const stepCode = String(project?.workflow?.[stage]?.currentStep || "pending").toLowerCase();
+  if (!stepCode || stepCode === "pending") return "pending";
+  const step = config?.[stage]?.steps?.find((item: any) => item.code === stepCode);
+  if (step?.final) return step.success ? "success" : "rejected";
+  if (stepCode.includes("rejected")) return "rejected";
+  if (["approved", "attestation_approved", "mes_done", "contract_signed"].includes(stepCode)) {
+    return "success";
+  }
+  return "in_progress";
 };
 
-const packClass = (pack = "") => `badge-pack badge-pack-${pack.replace(/[^a-z0-9]/gi, "_")}`;
+const workflowColors: Record<string, { background: string; color: string }> = {
+  pending: { background: "#e2e8f0", color: "#475569" },
+  in_progress: { background: "#fde68a", color: "#92400e" },
+  success: { background: "#dcfce7", color: "#166534" },
+  rejected: { background: "#fee2e2", color: "#991b1b" },
+};
+
+const workflowLabel = (stage: string) => {
+  if (stage === "dp") return "DP";
+  if (stage === "consuel") return "Consuel";
+  if (stage === "enedis") return "Enedis";
+  if (stage === "edfOa") return "EDF OA";
+  return stage;
+};
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { data: leadsData, loading: leadsLoading } = useCollection("leads");
-  const { data: filesData, loading: filesLoading } = useCollection("files");
+  const [leadsData, setLeadsData] = useState<any[]>([]);
+  const [projectsData, setProjectsData] = useState<any[]>([]);
+  const [workflowConfig, setWorkflowConfig] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [packFilter, setPackFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
-  const loading = leadsLoading || filesLoading;
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [leadsRes, projectsRes, workflowRes] = await Promise.all([
+        fetchJson("/api/leads?limit=200"),
+        fetchJson("/api/projects?limit=200"),
+        fetchJson("/api/workflow-config"),
+      ]);
+      const leads = Array.isArray(leadsRes?.items) ? leadsRes.items : Array.isArray(leadsRes) ? leadsRes : [];
+      const projects = Array.isArray(projectsRes?.items)
+        ? projectsRes.items
+        : Array.isArray(projectsRes)
+        ? projectsRes
+        : [];
+      const config = workflowRes?.config || workflowRes;
+      setLeadsData(leads);
+      setProjectsData(projects);
+      setWorkflowConfig(config);
+    } catch (err: any) {
+      setError(err?.message || "Erreur API");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const leads = leadsData || [];
-  const files = filesData || [];
+  const projects = projectsData || [];
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -51,63 +125,87 @@ export default function AdminDashboard() {
       }))
       .filter((lead: any) => now - lead.__created.getTime() <= THIRTY_DAYS)
       .sort((a: any, b: any) => b.__created.getTime() - a.__created.getTime());
-    const gained = recentLeads.filter((lead: any) => (lead.status || "").toLowerCase() === "gagne");
-    const lost = recentLeads.filter((lead: any) => (lead.status || "").toLowerCase() === "perdu");
-    const activeFiles = files.filter((file: any) => (file.statutGlobal || file.status || "").toLowerCase() === "en_cours");
-    const finalisedFiles = files.filter((file: any) => ["finalise", "clos"].includes((file.statutGlobal || file.status || "").toLowerCase()));
-    const blockedFiles = files.filter((file: any) => (file.statutGlobal || file.status || "").toLowerCase() === "bloque");
+    const gained = recentLeads.filter((lead: any) => ["gagne", "converted"].includes((lead.status || "").toLowerCase()));
+    const lost = recentLeads.filter((lead: any) => ["perdu", "lost"].includes((lead.status || "").toLowerCase()));
+    const activeProjects = projects.filter((project: any) => (project.status || "").toLowerCase() === "in_progress");
+    const completedProjects = projects.filter((project: any) => (project.status || "").toLowerCase() === "completed");
+    const blockedProjects = projects.filter((project: any) => (project.status || "").toLowerCase() === "blocked");
     return {
       leads30: recentLeads.length,
       gained: gained.length,
       lost: lost.length,
       recentLeads,
-      filesTotal: files.length,
-      filesActive: activeFiles.length,
-      filesFinalised: finalisedFiles.length,
-      filesBlocked: blockedFiles.length,
+      projectsTotal: projects.length,
+      projectsActive: activeProjects.length,
+      projectsCompleted: completedProjects.length,
+      projectsBlocked: blockedProjects.length,
     };
-  }, [leads, files]);
+  }, [leads, projects]);
 
   const actionsToday = useMemo(() => {
     const today = todayKey();
     const tomorrow = today + 24 * 60 * 60 * 1000;
-    return files.filter((file: any) => {
-      const next = toDate(file.nextActionDate);
-      if (!next) return false;
-      const time = next.getTime();
-      return time >= today && time < tomorrow;
+    const actions = [];
+    projects.forEach((project: any) => {
+      const consuelDate = toDate(project.workflow?.consuel?.visitDate);
+      const enedisDate = toDate(project.workflow?.enedis?.mesDate);
+      if (consuelDate && consuelDate.getTime() >= today && consuelDate.getTime() < tomorrow) {
+        actions.push({ project, label: "Visite Consuel", date: consuelDate });
+      }
+      if (enedisDate && enedisDate.getTime() >= today && enedisDate.getTime() < tomorrow) {
+        actions.push({ project, label: "MES Enedis", date: enedisDate });
+      }
     });
-  }, [files]);
+    return actions;
+  }, [projects]);
 
   const overdue = useMemo(() => {
-    const today = todayKey();
-    return files.filter((file: any) => {
-      const next = toDate(file.nextActionDate);
-      if (!next) return false;
-      const status = (file.statutGlobal || file.status || "").toLowerCase();
-      if (["finalise", "clos"].includes(status)) return false;
-      return next.getTime() < today;
-    });
-  }, [files]);
+    return projects.filter((project: any) => (project.status || "").toLowerCase() === "blocked");
+  }, [projects]);
 
   const filteredFiles = useMemo(() => {
-    return files.filter((file: any) => {
-      const pack = (file.pack || file.status || "").toLowerCase();
+    return projects.filter((project: any) => {
+      const pack = (project.pack || project.packCode || "").toLowerCase();
       if (packFilter && pack !== packFilter) return false;
-      const status = (file.statutGlobal || file.status || "").toLowerCase();
+      const status = (project.status || "").toLowerCase();
       if (statusFilter && status !== statusFilter) return false;
       if (search) {
         const needle = search.toLowerCase();
-        return [file.reference, file.title, file.clientFinal, file.address]
+        const beneficiary = project.beneficiary || {};
+        const address = beneficiary.address || {};
+        return [
+          project.reference,
+          beneficiary.firstName,
+          beneficiary.lastName,
+          beneficiary.email,
+          beneficiary.phone,
+          address.street,
+          address.city,
+          address.postalCode,
+        ]
           .filter(Boolean)
           .some((value: string) => value.toLowerCase().includes(needle));
       }
       return true;
     });
-  }, [files, packFilter, statusFilter, search]);
+  }, [projects, packFilter, statusFilter, search]);
+
+  const leadName = (lead: any) => {
+    const contact = lead.contact || {};
+    if (contact.firstName || contact.lastName) {
+      return [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+    }
+    return lead.name || lead.fullName || lead.profile || "—";
+  };
+
+  const leadEmail = (lead: any) => lead.contact?.email || lead.email || "—";
+  const leadPhone = (lead: any) => lead.contact?.phone || lead.phone || "—";
 
   if (loading) {
     return <div className="card">Chargement du dashboard…</div>;
+  }
+  if (error) {
+    return <div className="card">Erreur API : {error}</div>;
   }
 
   return (
@@ -134,8 +232,8 @@ export default function AdminDashboard() {
             <span>Dossiers</span>
             <span style={{ fontSize: 18 }}>📂</span>
           </div>
-          <div className="big">{stats.filesTotal}</div>
-          <div className="small">En cours : {stats.filesActive} · Finalisés : {stats.filesFinalised}</div>
+          <div className="big">{stats.projectsTotal}</div>
+          <div className="small">En cours : {stats.projectsActive} · Terminés : {stats.projectsCompleted}</div>
         </div>
         <div className="metric">
           <div className="metric-header">
@@ -151,7 +249,7 @@ export default function AdminDashboard() {
             <span style={{ fontSize: 18 }}>⚠️</span>
           </div>
           <div className="big">{overdue.length}</div>
-          <div className="small">Bloqués + relances</div>
+          <div className="small">Dossiers bloqués</div>
         </div>
       </div>
 
@@ -174,20 +272,20 @@ export default function AdminDashboard() {
               </thead>
               <tbody>
                 {stats.recentLeads.slice(0, 20).map((lead: any) => (
-                  <tr
-                    key={lead.id}
-                    className="clickable-row"
-                    onClick={() => navigate(`/leads/${lead.id}`)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <td>{lead.name || lead.fullName || lead.profile || "—"}</td>
-                    <td>{lead.email || "—"}</td>
-                    <td>{lead.phone || "—"}</td>
-                    <td><span className={`badge-status ${lead.status || "nouveau"}`}>{lead.status || "nouveau"}</span></td>
-                    <td>{(lead.__created || toDate(lead.createdAt) || new Date()).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
+                <tr
+                  key={lead.id}
+                  className="clickable-row"
+                  onClick={() => navigate(`/admin/leads/${lead.id}`)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <td>{leadName(lead)}</td>
+                  <td>{leadEmail(lead)}</td>
+                  <td>{leadPhone(lead)}</td>
+                  <td><span className={`badge-status ${lead.status || "nouveau"}`}>{lead.status || "nouveau"}</span></td>
+                  <td>{(lead.__created || toDate(lead.createdAt) || new Date()).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
             </table>
           </div>
         </div>
@@ -199,11 +297,11 @@ export default function AdminDashboard() {
           {actionsToday.length === 0 && <div className="small">Aucune action planifiée.</div>}
           {actionsToday.length > 0 && (
             <ul className="timeline">
-              {actionsToday.map((file: any) => (
-                <li key={file.id}>
-                  <strong>{file.reference || file.title}</strong>
-                  <span>{file.nextAction || "—"}</span>
-                  <small>{toDate(file.nextActionDate)?.toLocaleDateString()}</small>
+              {actionsToday.map((item: any) => (
+                <li key={`${item.project.id}-${item.label}`}>
+                  <strong>{item.project.reference || item.project.title}</strong>
+                  <span>{item.label}</span>
+                  <small>{item.date.toLocaleDateString()}</small>
                 </li>
               ))}
             </ul>
@@ -214,11 +312,11 @@ export default function AdminDashboard() {
           {overdue.length === 0 && <div className="small">Aucun dossier en retard.</div>}
           {overdue.length > 0 && (
             <ul className="timeline">
-              {overdue.map((file: any) => (
-                <li key={file.id}>
-                  <strong>{file.reference || file.title}</strong>
-                  <span>{file.nextAction || "—"}</span>
-                  <small>Prévu : {toDate(file.nextActionDate)?.toLocaleDateString()}</small>
+              {overdue.map((project: any) => (
+                <li key={project.id}>
+                  <strong>{project.reference || project.title}</strong>
+                  <span>Statut : bloqué</span>
+                  <small>Progression : {Math.round(project.progress || 0)}%</small>
                 </li>
               ))}
             </ul>
@@ -236,11 +334,9 @@ export default function AdminDashboard() {
           </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">Statut (tous)</option>
-            <option value="en_cours">En cours</option>
-            <option value="en_attente">En attente</option>
-            <option value="bloque">Bloqué</option>
-            <option value="finalise">Finalisé</option>
-            <option value="clos">Clos</option>
+            <option value="in_progress">En cours</option>
+            <option value="completed">Terminé</option>
+            <option value="blocked">Bloqué</option>
           </select>
           <input
             placeholder="Recherche référence / client"
@@ -256,20 +352,73 @@ export default function AdminDashboard() {
                 <th>Référence</th>
                 <th>Client</th>
                 <th>Pack</th>
-                <th>Statut</th>
-                <th>Prochaine action</th>
+                <th>Progress</th>
+                <th>Workflow</th>
               </tr>
             </thead>
             <tbody>
-              {filteredFiles.map((file: any) => (
-                <tr key={file.id} className="clickable-row" onClick={() => navigate(`/dossiers/${file.id}`)}>
-                  <td>{file.reference || file.title}</td>
-                  <td>{file.clientFinal || file.address || "—"}</td>
-                  <td><span className={packClass(file.pack || file.status)}>{PACKS.find((p) => p.value === (file.pack || file.status))?.label || (file.pack || file.status)}</span></td>
-                  <td><span className={statusClass(file.statutGlobal || file.status)}>{file.statutGlobal || file.status}</span></td>
-                  <td>{file.nextAction || "—"}</td>
-                </tr>
-              ))}
+              {filteredFiles.map((project: any) => {
+                const beneficiary = project.beneficiary || {};
+                const fullName = [beneficiary.firstName, beneficiary.lastName].filter(Boolean).join(" ");
+                const packValue = (project.pack || project.packCode || "").toLowerCase();
+                const progressValue = Math.round(project.progress || 0);
+                return (
+                  <tr
+                    key={project.id}
+                    className="clickable-row"
+                    onClick={() => navigate(`/admin/projects/${project.id}`)}
+                  >
+                    <td>{project.reference || project.title}</td>
+                    <td>{fullName || beneficiary.email || "—"}</td>
+                    <td>
+                      <span className={packClass(packValue || "")}>
+                        {PACKS.find((p) => p.value === packValue)?.label || project.pack || "—"}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 120 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{progressValue}%</div>
+                        <div style={{ background: "#e2e8f0", borderRadius: 999, height: 6, overflow: "hidden" }}>
+                          <div
+                            style={{
+                              width: `${Math.min(100, progressValue)}%`,
+                              height: "100%",
+                              background: progressValue >= 100 ? "#16a34a" : "#f59e0b",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {workflowStages.map((stage) => {
+                          const state = workflowStatus(project, stage, workflowConfig);
+                          const colors = workflowColors[state] || workflowColors.pending;
+                          return (
+                            <span
+                              key={stage}
+                              title={`${workflowLabel(stage)} : ${project.workflow?.[stage]?.currentStep || "pending"}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "4px 8px",
+                                borderRadius: 999,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: colors.background,
+                                color: colors.color,
+                              }}
+                            >
+                              {workflowLabel(stage)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

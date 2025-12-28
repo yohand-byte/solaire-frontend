@@ -5,23 +5,43 @@ import {
   Building2, Mail, Phone, TrendingUp, FolderKanban,
   ChevronRight, X
 } from 'lucide-react';
-import { Card, Button, Badge, Avatar, Input, Select, EmptyState, Loading, Progress } from '../components/ui';
+import { Card, Button, Badge, Avatar, Input, Select, EmptyState, Loading, Progress, Modal } from '../components/ui';
 import { clsx } from 'clsx';
+import ProjectForm from '../components/forms/ProjectForm';
 
-export default function Installers({ data, loading, onSelect, onCreateProject }) {
+export default function Installers({ data, loading, onSelect, onCreateProject, onViewProjects, installers = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedInstaller, setSelectedInstaller] = useState(null);
+  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [projectInstallerId, setProjectInstallerId] = useState(null);
 
-  const installers = data?.items || [];
+  const installerItems = data?.items || [];
 
-  const filtered = installers.filter(inst => {
+  const filtered = installerItems.filter(inst => {
     const matchesSearch = 
       (inst.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (inst.contact?.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || inst.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const openCreateProject = (installerId) => {
+    setProjectInstallerId(installerId || null);
+    setShowCreateProjectModal(true);
+  };
+
+  const handleCreateProject = async (formData) => {
+    setCreatingProject(true);
+    try {
+      await onCreateProject?.(formData);
+      setShowCreateProjectModal(false);
+      setProjectInstallerId(null);
+    } finally {
+      setCreatingProject(false);
+    }
+  };
 
   if (loading) return <Loading text="Chargement des installateurs..." />;
 
@@ -136,7 +156,7 @@ export default function Installers({ data, loading, onSelect, onCreateProject })
                 <div className="mt-4 flex gap-2">
                   <Button variant="secondary" size="sm" className="flex-1" onClick={(e) => {
                     e.stopPropagation();
-                    onCreateProject?.(installer.id);
+                    openCreateProject(installer.id);
                   }}>
                     <Plus className="w-4 h-4 mr-1" /> Projet
                   </Button>
@@ -159,15 +179,30 @@ export default function Installers({ data, loading, onSelect, onCreateProject })
           <InstallerDrawer
             installer={selectedInstaller}
             onClose={() => setSelectedInstaller(null)}
-            onCreateProject={onCreateProject}
+            onCreateProject={(installerId) => {
+              setSelectedInstaller(null);
+              openCreateProject(installerId);
+            }}
+            onViewProjects={onViewProjects}
           />
         )}
       </AnimatePresence>
+
+      <Modal isOpen={showCreateProjectModal} onClose={() => { setShowCreateProjectModal(false); setProjectInstallerId(null); }} title="Nouveau projet" size="lg">
+        <ProjectForm
+          key={projectInstallerId || 'project-form'}
+          onSubmit={handleCreateProject}
+          onCancel={() => { setShowCreateProjectModal(false); setProjectInstallerId(null); }}
+          loading={creatingProject}
+          installers={installers}
+          initialData={projectInstallerId ? { installerId: projectInstallerId } : undefined}
+        />
+      </Modal>
     </div>
   );
 }
 
-function InstallerDrawer({ installer, onClose, onCreateProject }) {
+function InstallerDrawer({ installer, onClose, onCreateProject, onViewProjects }) {
   return (
     <>
       <motion.div
@@ -268,7 +303,7 @@ function InstallerDrawer({ installer, onClose, onCreateProject }) {
             <Button variant="primary" className="flex-1" icon={Plus} onClick={() => onCreateProject?.(installer.id)}>
               Nouveau projet
             </Button>
-            <Button variant="secondary" className="flex-1" icon={FolderKanban}>
+            <Button variant="secondary" className="flex-1" icon={FolderKanban} onClick={() => onViewProjects?.(installer.id)}>
               Voir projets
             </Button>
           </div>

@@ -562,7 +562,20 @@ function FileDetail({ file, attachments, setAttachments, clientsById }) {
         }
       } catch (_e) { /* ignore */ }
     }
-    if (url) window.open(url, "_blank", "noopener");
+    if (url) {
+      if (url.startsWith("data:")) {
+        const arr = url.split(",");
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        const blob = new Blob([u8arr], { type: mime });
+        window.open(URL.createObjectURL(blob), "_blank", "noopener");
+      } else {
+        window.open(url, "_blank", "noopener");
+      }
+    }
     else alert("Aucun aperçu dispo. Ré-uploade le PDF pour générer un lien.");
   };
 
@@ -1787,7 +1800,7 @@ Body: { "company": "...", "name": "...", "email": "...", "phone": "...", "volume
               </div>
               <div style={{ marginTop: 12 }}>
                 <div className="small">Adresse : {previewFile.address || "—"}</div>
-                <div className="small" style={{ marginTop: 4 }}>Consuel : {previewFile.consuelStatus || "—"} • Enedis : {previewFile.enedisStatus || "—"} • EDF OA : {previewFile.edfStatus || "—"}</div>
+                <div className="small" style={{ marginTop: 4 }}>Mairie : {previewFile.mairieStatus || "—"} • Consuel : {previewFile.consuelStatus || "—"} • Enedis : {previewFile.enedisStatus || "—"} • EDF OA : {previewFile.edfStatus || "—"}</div>
               </div>
               <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button className="btn-primary" onClick={() => { setSelectedFile(previewFile); setPreviewFile(null); }}>Ouvrir la fiche</button>

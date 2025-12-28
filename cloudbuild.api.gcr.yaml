@@ -1,0 +1,5 @@
+steps:
+- name: gcr.io/cloud-builders/docker
+  args: ['build','-f','Dockerfile.api','-t','gcr.io/gentle-mapper-479320-j1/solaire-api:latest','.']
+images:
+- 'gcr.io/gentle-mapper-479320-j1/solaire-api:latest'
