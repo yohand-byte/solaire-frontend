@@ -39,9 +39,11 @@ const formatDate = (d) => {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+const normalizeCategory = (value) => (value || '').toLowerCase();
+
 export default function Documents({ documents = [], loading, onRefresh }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -52,12 +54,13 @@ export default function Documents({ documents = [], loading, onRefresh }) {
 
   const filtered = items.filter(doc => {
     const matchesSearch = (doc.filename || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || doc.category === categoryFilter;
+    if (!categoryFilter) return false;
+    const matchesCategory = normalizeCategory(doc.category) === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
   const stats = Object.keys(CATEGORY_CONFIG).reduce((acc, key) => {
-    acc[key] = items.filter(d => d.category === key).length;
+    acc[key] = items.filter(d => normalizeCategory(d.category) === key).length;
     return acc;
   }, {});
 
@@ -144,7 +147,7 @@ export default function Documents({ documents = [], loading, onRefresh }) {
               "p-4 text-center cursor-pointer transition-all",
               categoryFilter === key && "ring-2 ring-blue-500"
             )}
-            onClick={() => setCategoryFilter(categoryFilter === key ? 'all' : key)}
+            onClick={() => setCategoryFilter(categoryFilter === key ? '' : key)}
           >
             <div className={clsx(
               'w-10 h-10 rounded-xl mx-auto mb-2 flex items-center justify-center',
@@ -173,7 +176,7 @@ export default function Documents({ documents = [], loading, onRefresh }) {
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             options={[
-              { value: 'all', label: 'Toutes catégories' },
+              { value: '', label: 'Veuillez choisir la categorie' },
               ...Object.entries(CATEGORY_CONFIG).map(([key, config]) => ({
                 value: key,
                 label: config.label
@@ -188,8 +191,12 @@ export default function Documents({ documents = [], loading, onRefresh }) {
       {filtered.length === 0 ? (
         <EmptyState
           icon={Folder}
-          title="Aucun document"
-          description="Uploadez des documents PDF, PNG ou JPEG"
+          title={categoryFilter ? "Aucun document" : "Selectionnez une categorie"}
+          description={
+            categoryFilter
+              ? "Uploadez des documents PDF, PNG ou JPEG"
+              : "Choisissez une categorie pour afficher les documents."
+          }
           action={
             <Button variant="primary" icon={Upload} onClick={() => setShowUploadModal(true)}>
               Uploader un document
@@ -202,7 +209,8 @@ export default function Documents({ documents = [], loading, onRefresh }) {
             const FileIcon = getFileIcon(doc.mimeType);
             const isImage = doc.mimeType?.startsWith('image/');
             const isPdf = doc.mimeType === 'application/pdf';
-            const categoryConfig = CATEGORY_CONFIG[doc.category] || CATEGORY_CONFIG.autre;
+            const categoryKey = normalizeCategory(doc.category);
+            const categoryConfig = CATEGORY_CONFIG[categoryKey] || CATEGORY_CONFIG.autre;
             
             return (
               <motion.div
@@ -224,10 +232,17 @@ export default function Documents({ documents = [], loading, onRefresh }) {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
                     ) : isPdf ? (
-                      <div className="flex flex-col items-center text-gray-400">
-                        <FileText className="w-16 h-16" />
-                        <span className="text-xs mt-2">PDF</span>
-                      </div>
+                      <object
+                        data={doc.url}
+                        type="application/pdf"
+                        className="w-full h-full pointer-events-none"
+                        aria-label={doc.filename}
+                      >
+                        <div className="flex flex-col items-center text-gray-400">
+                          <FileText className="w-16 h-16" />
+                          <span className="text-xs mt-2">PDF</span>
+                        </div>
+                      </object>
                     ) : (
                       <FileIcon className="w-16 h-16 text-gray-300" />
                     )}

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FolderKanban, Search, Plus, MapPin, Zap, User, X,
   CheckCircle2, Clock, AlertCircle, FileText, Edit, Calendar, 
-  Upload, ChevronDown, RotateCcw, ExternalLink, Trash2, Loader2
+  Upload, ChevronDown, RotateCcw, ExternalLink, Trash2, Loader2, Eye, File
 } from 'lucide-react';
 import { Card, Button, Badge, Input, Select, EmptyState, Loading, Progress, Modal } from '../components/ui';
 import ProjectForm from '../components/forms/ProjectForm';
@@ -290,10 +290,15 @@ function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
   const [documents, setDocuments] = useState({});
   const [uploading, setUploading] = useState(null);
   const [loadingDocs, setLoadingDocs] = useState(true);
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [generatingCerfa, setGeneratingCerfa] = useState(false);
+  const [cerfaStatus, setCerfaStatus] = useState(null);
   const workflow = project.workflow || {};
 
   useEffect(() => {
     loadDocuments();
+    setCerfaStatus(null);
+    setGeneratingCerfa(false);
   }, [project.id]);
 
   const loadDocuments = async () => {
@@ -325,6 +330,31 @@ function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
       await onUpdateWorkflow?.(project.id, stage, newStep);
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const generateCerfa = async () => {
+    setGeneratingCerfa(true);
+    setCerfaStatus(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/cerfa/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Token': API_TOKEN
+        },
+        body: JSON.stringify({ projectId: project.id })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || data.detail || 'Erreur génération CERFA');
+      }
+      setCerfaStatus({ type: 'ok', text: 'CERFA généré et ajouté aux documents.' });
+      await loadDocuments();
+    } catch (err) {
+      setCerfaStatus({ type: 'err', text: err.message || 'Erreur génération CERFA' });
+    } finally {
+      setGeneratingCerfa(false);
     }
   };
 
@@ -479,15 +509,39 @@ function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
                               );
                             })}
                           </div>
-                          {currentStep !== 'pending' && (
-                            <button onClick={() => handleStepChange(stage, 'pending')} className="mt-3 flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
-                              <RotateCcw className="w-4 h-4" /> Réinitialiser
-                            </button>
+                        {currentStep !== 'pending' && (
+                          <button onClick={() => handleStepChange(stage, 'pending')} className="mt-3 flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+                            <RotateCcw className="w-4 h-4" /> Réinitialiser
+                          </button>
+                        )}
+                      </div>
+
+                      {stage === 'dp' && (
+                        <div className="pt-4 border-t">
+                          <p className="text-sm font-medium text-gray-700 mb-3">CERFA 16702-01 :</p>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className="w-full"
+                            icon={generatingCerfa ? Loader2 : FileText}
+                            onClick={generateCerfa}
+                            disabled={generatingCerfa}
+                          >
+                            {generatingCerfa ? 'Génération en cours...' : '📄 Générer CERFA 16702-01'}
+                          </Button>
+                          {cerfaStatus && (
+                            <p className={clsx(
+                              'mt-2 text-sm',
+                              cerfaStatus.type === 'ok' ? 'text-emerald-600' : 'text-red-600'
+                            )}>
+                              {cerfaStatus.text}
+                            </p>
                           )}
                         </div>
+                      )}
 
-                        <div className="pt-4 border-t">
-                          <p className="text-sm font-medium text-gray-700 mb-3">Documents :</p>
+                      <div className="pt-4 border-t">
+                        <p className="text-sm font-medium text-gray-700 mb-3">Documents :</p>
                           {loadingDocs ? (
                             <p className="text-sm text-gray-400">Chargement...</p>
                           ) : stageDocs.length === 0 ? (
@@ -497,7 +551,11 @@ function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
                               {stageDocs.map(doc => (
                                 <div key={doc.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border">
                                   {doc.mimeType?.startsWith('image/') ? (
-                                    <img src={doc.url} className="w-10 h-10 object-cover rounded" />
+                                    <img
+                                      src={doc.url}
+                                      className="w-10 h-10 object-cover rounded"
+                                      onClick={() => setPreviewDoc(doc)}
+                                    />
                                   ) : (
                                     <FileText className="w-10 h-10 text-red-500 flex-shrink-0" />
                                   )}
@@ -505,6 +563,9 @@ function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
                                     <p className="text-sm font-medium truncate">{doc.filename}</p>
                                     <p className="text-xs text-gray-500">{formatFileSize(doc.size)}</p>
                                   </div>
+                                  <button onClick={() => setPreviewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded">
+                                    <Eye className="w-4 h-4 text-gray-500" />
+                                  </button>
                                   <button onClick={() => window.open(doc.url, '_blank')} className="p-1.5 hover:bg-gray-100 rounded">
                                     <ExternalLink className="w-4 h-4 text-gray-500" />
                                   </button>
@@ -554,7 +615,67 @@ function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
           </div>
         </div>
       </motion.div>
+      <ProjectPreviewModal
+        doc={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+        onOpenNewTab={() => previewDoc && window.open(previewDoc.url, '_blank')}
+      />
     </>
+  );
+}
+
+function ProjectPreviewModal({ doc, onClose, onOpenNewTab }) {
+  if (!doc) return null;
+  const isImage = doc.mimeType?.startsWith('image/');
+  const isPdf = doc.mimeType === 'application/pdf';
+
+  return (
+    <AnimatePresence>
+      {doc && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 z-50"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-4 z-50 flex flex-col bg-white rounded-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <h3 className="font-semibold">{doc.filename}</h3>
+                <p className="text-sm text-gray-500">{formatFileSize(doc.size)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" icon={ExternalLink} onClick={onOpenNewTab}>
+                  Ouvrir
+                </Button>
+                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-gray-100 flex items-center justify-center">
+              {isImage ? (
+                <img src={doc.url} alt={doc.filename} className="max-w-full max-h-full object-contain" />
+              ) : isPdf ? (
+                <iframe src={doc.url} className="w-full h-full bg-white rounded-lg" />
+              ) : (
+                <div className="text-center text-gray-500">
+                  <File className="w-24 h-24 mx-auto mb-4" />
+                  <p>Apercu non disponible</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
