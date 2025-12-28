@@ -2,10 +2,16 @@
 
 ## Résumé des mises à jour (Codex + Yohan CRM Updates)
 - Portail Admin Firebase (/admin) branché sur l’API REST (projets, leads, installateurs, documents, workflow).
-- Détails projet Admin: workflow éditable, progression, documents (liste + upload + preview).
-- Détails lead Admin: lecture API + conversion et undo convert.
-- Portail Client (/client): magic link Firebase, dashboard installateur, suivi dossier en lecture seule.
-- CRM Cloud Run: notifications in-app, cloche active, mode sombre persistant, création projet depuis installateur.
+- Dashboard admin: stats via API, progrès 0-100, mini workflow (DP/Consuel/Enedis/EDF OA), liens directs vers détails.
+- Détails projet admin: workflow éditable (PATCH), progression, documents (liste + upload + preview).
+- Détails lead admin: lecture API, conversion lead -> installateur + undo convert.
+- Docs admin: onglet Documents relié à `/api/documents` avec listing global.
+- Portail Client (/client): magic link Firebase réel, dashboard installateur, suivi dossier en lecture seule.
+- Client dossier: étapes workflow affichées (labels), progression globale, documents en lecture.
+- CRM Cloud Run: notifications in-app (cloche + dropdown), préférences sauvegardées, mode sombre persistant.
+- CRM Installateurs: création de projet depuis un installateur (modal), liste projets filtrée.
+- Formulaire projet: ajout puissance panneau (Wc) + calcul auto du nombre de panneaux.
+- Workflow/indexes: index Firestore documents + projects.
 - Rollback: script `scripts/backup-admin-portal.sh` + guide `docs/ROLLBACK_ADMIN_PORTAL.md`.
 
 ## ✅ État actuel
