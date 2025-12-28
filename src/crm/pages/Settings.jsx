@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { auth } from '../../lib/firestore';
 import { motion } from 'framer-motion';
 import { 
   Settings as SettingsIcon, User, Bell, Shield, CreditCard,
@@ -174,6 +176,48 @@ function NotificationSettings() {
 }
 
 function SecuritySettings() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  const handlePasswordUpdate = async () => {
+    setStatus(null);
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setStatus({ type: 'error', message: 'Tous les champs sont requis.' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setStatus({ type: 'error', message: 'Le mot de passe doit contenir au moins 6 caracteres.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setStatus({ type: 'error', message: 'Les mots de passe ne correspondent pas.' });
+      return;
+    }
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      setStatus({ type: 'error', message: 'Utilisateur non connecte.' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setStatus({ type: 'success', message: 'Mot de passe mis a jour.' });
+    } catch (err) {
+      setStatus({ type: 'error', message: 'Impossible de mettre a jour le mot de passe.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card className="p-6 space-y-6">
       <div>
@@ -182,9 +226,27 @@ function SecuritySettings() {
       </div>
 
       <div className="space-y-4">
-        <Input label="Mot de passe actuel" type="password" placeholder="••••••••" />
-        <Input label="Nouveau mot de passe" type="password" placeholder="••••••••" />
-        <Input label="Confirmer le mot de passe" type="password" placeholder="••••••••" />
+        <Input
+          label="Mot de passe actuel"
+          type="password"
+          placeholder="••••••••"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+        />
+        <Input
+          label="Nouveau mot de passe"
+          type="password"
+          placeholder="••••••••"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+        />
+        <Input
+          label="Confirmer le mot de passe"
+          type="password"
+          placeholder="••••••••"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
       </div>
 
       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
@@ -200,9 +262,20 @@ function SecuritySettings() {
         </Button>
       </div>
 
+      {status && (
+        <div
+          className={clsx(
+            'p-3 rounded-xl text-sm',
+            status.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+          )}
+        >
+          {status.message}
+        </div>
+      )}
+
       <div className="pt-4 border-t border-gray-100">
-        <Button variant="primary" icon={Save}>
-          Mettre à jour
+        <Button variant="primary" icon={Save} onClick={handlePasswordUpdate} loading={saving}>
+          Mettre a jour
         </Button>
       </div>
     </Card>
