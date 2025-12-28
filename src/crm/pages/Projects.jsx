@@ -350,6 +350,7 @@ function ProjectDrawer({ project, onClose, onUpdateWorkflow, onEdit }) {
         throw new Error(data.error || data.detail || 'Erreur génération CERFA');
       }
       setCerfaStatus({ type: 'ok', text: 'CERFA généré et ajouté aux documents.' });
+      await onUpdateWorkflow?.(project.id, 'dp', 'draft');
       await loadDocuments();
     } catch (err) {
       setCerfaStatus({ type: 'err', text: err.message || 'Erreur génération CERFA' });

@@ -41,6 +41,18 @@ const formatDate = (d) => {
 
 const normalizeCategory = (value) => (value || '').toLowerCase();
 
+const resolveCategory = (doc) => {
+  const raw = normalizeCategory(doc.category || doc.stage || '');
+  if (!raw) return '';
+  if (CATEGORY_CONFIG[raw]) return raw;
+  if (raw.includes('dp')) return 'dp';
+  if (raw.includes('consuel')) return 'consuel';
+  if (raw.includes('enedis')) return 'enedis';
+  if (raw.includes('edf') || raw.includes('oa')) return 'edfoa';
+  if (raw.includes('fact')) return 'facture';
+  return 'autre';
+};
+
 export default function Documents({ documents = [], loading, onRefresh }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -55,12 +67,12 @@ export default function Documents({ documents = [], loading, onRefresh }) {
   const filtered = items.filter(doc => {
     const matchesSearch = (doc.filename || '').toLowerCase().includes(searchTerm.toLowerCase());
     if (!categoryFilter) return false;
-    const matchesCategory = normalizeCategory(doc.category) === categoryFilter;
+    const matchesCategory = resolveCategory(doc) === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
   const stats = Object.keys(CATEGORY_CONFIG).reduce((acc, key) => {
-    acc[key] = items.filter(d => normalizeCategory(d.category) === key).length;
+    acc[key] = items.filter(d => resolveCategory(d) === key).length;
     return acc;
   }, {});
 
@@ -209,7 +221,7 @@ export default function Documents({ documents = [], loading, onRefresh }) {
             const FileIcon = getFileIcon(doc.mimeType);
             const isImage = doc.mimeType?.startsWith('image/');
             const isPdf = doc.mimeType === 'application/pdf';
-            const categoryKey = normalizeCategory(doc.category);
+            const categoryKey = resolveCategory(doc);
             const categoryConfig = CATEGORY_CONFIG[categoryKey] || CATEGORY_CONFIG.autre;
             
             return (
