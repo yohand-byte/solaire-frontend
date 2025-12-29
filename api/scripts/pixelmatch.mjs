@@ -5,6 +5,7 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import sharp from 'sharp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +13,7 @@ const rootDir = path.resolve(__dirname, '..');
 const referenceDir = path.join(rootDir, 'reference');
 const refDir = path.join(referenceDir, '_pixelmatch', 'ref');
 const genDir = path.join(referenceDir, '_pixelmatch', 'gen');
+const genNormDir = path.join(referenceDir, '_pixelmatch', 'gen_norm');
 const diffDir = path.join(referenceDir, '_pixelmatch', 'diff');
 
 const REF_PDF = path.join(referenceDir, 'DP_Dossier_Complet.pdf');
@@ -89,13 +91,38 @@ async function rasterizePdf(pdfPath, outDir, totalPages) {
   await normalizePdftoppmOutput(outDir, totalPages);
 }
 
+async function normalizeToPortrait(filePath, outPath) {
+  const buffer = await fs.readFile(filePath);
+  let png = PNG.sync.read(buffer);
+  let outBuffer = buffer;
+  let rotated = false;
+
+  if (png.width > png.height) {
+    outBuffer = await sharp(buffer).rotate(90).png().toBuffer();
+    png = PNG.sync.read(outBuffer);
+    rotated = true;
+  }
+
+  if (outPath) {
+    await fs.writeFile(outPath, outBuffer);
+  }
+
+  return { png, rotated };
+}
+
 async function comparePage(pageNumber) {
   const refName = `page-${pad2(pageNumber)}.png`;
   const refPath = path.join(refDir, refName);
   const testPath = path.join(genDir, refName);
   const diffPath = path.join(diffDir, `diff-${pad2(pageNumber)}.png`);
+  const genNormPath = path.join(genNormDir, refName);
 
-  const [refPng, testPng] = await Promise.all([readPng(refPath), readPng(testPath)]);
+  const [refNormalized, genNormalized] = await Promise.all([
+    normalizeToPortrait(refPath),
+    normalizeToPortrait(testPath, genNormPath),
+  ]);
+  const refPng = refNormalized.png;
+  const testPng = genNormalized.png;
 
   if (refPng.width !== testPng.width || refPng.height !== testPng.height) {
     throw new Error(
@@ -163,6 +190,7 @@ async function main() {
   console.log(`Rasterizing generated PDF -> ${genDir}`);
   await rasterizePdf(genPdfPath, genDir, totalPages);
 
+  await ensureDir(genNormDir);
   await ensureDir(diffDir);
 
   let totalDiff = 0;
