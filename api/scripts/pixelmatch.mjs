@@ -116,13 +116,13 @@ async function logPdfPageSize(pdfPath, pageNumber) {
   }
 }
 
-async function normalizeToPortrait(filePath, outPath) {
+async function normalizeToLandscape(filePath, outPath) {
   const buffer = await fs.readFile(filePath);
   let png = PNG.sync.read(buffer);
   let outBuffer = buffer;
   let rotated = false;
 
-  if (png.width > png.height) {
+  if (png.width < png.height) {
     outBuffer = await sharp(buffer).rotate(90).png().toBuffer();
     png = PNG.sync.read(outBuffer);
     rotated = true;
@@ -143,8 +143,8 @@ async function comparePage(pageNumber) {
   const genNormPath = path.join(genNormDir, refName);
 
   const [refNormalized, genNormalized] = await Promise.all([
-    normalizeToPortrait(refPath),
-    normalizeToPortrait(testPath, genNormPath),
+    normalizeToLandscape(refPath),
+    normalizeToLandscape(testPath, genNormPath),
   ]);
   const refPng = refNormalized.png;
   const testPng = genNormalized.png;
