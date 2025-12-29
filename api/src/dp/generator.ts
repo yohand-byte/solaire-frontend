@@ -92,6 +92,10 @@ const DP4_ROOF_HEIGHT = 180;
 
 const DEFAULT_DPI = 300;
 
+function addPortraitPage(doc: PDFDocument): void {
+  doc.addPage({ size: [PAGE_WIDTH_PT, PAGE_HEIGHT_PT], margin: 0 });
+}
+
 function ensureDir(dirPath: string): Promise<void> {
   return fsPromises.mkdir(dirPath, { recursive: true });
 }
@@ -424,22 +428,22 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
 
   renderCoverPage(doc, 'Installation photovoltaique', geocoded.label);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/2000', assets.dp1.plan2000);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/5000', assets.dp1.plan5000);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp2Page(doc, 'DP2 - PLAN DE MASSE AVANT', '1/250', assets.dp2.avant);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp2Page(doc, 'DP2 - PLAN DE MASSE APRES', '1/250', assets.dp2.apres);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp4Page(
     doc,
     {
@@ -455,19 +459,19 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
     assets.dp4.ortho
   );
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp5Page(doc, assets.dp5.ortho);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp6Page(doc, assets.dp6.view);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp7Page(doc, assets.dp7.view);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp8Page(doc, assets.dp8.view);
 
-  doc.addPage();
+  addPortraitPage(doc);
   renderDp11Page(doc, buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef: 'XX 0000', orientation: 'SUD' }));
 
   doc.end();
