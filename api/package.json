@@ -10,9 +10,16 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.18.0",
+    "@sparticuz/chromium": "^143.0.0",
+    "axios": "^1.13.2",
     "busboy": "^1.6.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "firebase-admin": "^11.11.0"
+    "firebase-admin": "^11.11.0",
+    "pdfkit": "^0.17.2",
+    "proj4": "^2.20.2",
+    "puppeteer": "^24.34.0",
+    "puppeteer-core": "^24.34.0",
+    "sharp": "^0.34.5"
   }
 }
