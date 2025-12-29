@@ -20,6 +20,7 @@ const REF_PDF = path.join(referenceDir, 'DP_Dossier_Complet.pdf');
 const DEFAULT_DPI = 200;
 const DEFAULT_PAGES = 12;
 const execFileAsync = promisify(execFile);
+let debugMode = false;
 
 function pad2(value) {
   return String(value).padStart(2, '0');
@@ -91,6 +92,30 @@ async function rasterizePdf(pdfPath, outDir, totalPages) {
   await normalizePdftoppmOutput(outDir, totalPages);
 }
 
+async function logPdfPageSize(pdfPath, pageNumber) {
+  try {
+    const { stdout } = await execFileAsync('pdfinfo', [
+      '-f',
+      String(pageNumber),
+      '-l',
+      String(pageNumber),
+      pdfPath,
+    ]);
+    const pageLine = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.startsWith('Page size'));
+
+    if (pageLine) {
+      console.log(`pdf page-${pageNumber} size: ${pageLine}`);
+    } else if (stdout.trim()) {
+      console.log(`pdf page-${pageNumber} info:\n${stdout.trim()}`);
+    }
+  } catch (err) {
+    console.warn(`pdfinfo failed for page-${pageNumber}:`, err.message);
+  }
+}
+
 async function normalizeToPortrait(filePath, outPath) {
   const buffer = await fs.readFile(filePath);
   let png = PNG.sync.read(buffer);
@@ -123,6 +148,12 @@ async function comparePage(pageNumber) {
   ]);
   const refPng = refNormalized.png;
   const testPng = genNormalized.png;
+
+  if (debugMode) {
+    console.log(
+      `page-${pad2(pageNumber)}: ref=${refPng.width}x${refPng.height} (rotated=${refNormalized.rotated ? 'yes' : 'no'}) vs gen=${testPng.width}x${testPng.height} (rotated=${genNormalized.rotated ? 'yes' : 'no'})`
+    );
+  }
 
   if (refPng.width !== testPng.width || refPng.height !== testPng.height) {
     throw new Error(
@@ -158,8 +189,14 @@ async function comparePage(pageNumber) {
 }
 
 async function main() {
-  const genPdfArg = process.argv[2];
-  const pageArg = process.argv[3];
+  const args = process.argv.slice(2);
+  debugMode = args.includes('--debug');
+  if (debugMode) {
+    args.splice(args.indexOf('--debug'), 1);
+  }
+
+  const genPdfArg = args[0];
+  const pageArg = args[1];
   const totalPages = pageArg ? Number(pageArg) : DEFAULT_PAGES;
 
   if (!genPdfArg) {
@@ -184,11 +221,17 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Rasterizing reference PDF -> ${refDir}`);
+  if (debugMode) {
+    console.log(`Rasterizing reference PDF -> ${refDir}`);
+  }
   await rasterizePdf(REF_PDF, refDir, totalPages);
 
-  console.log(`Rasterizing generated PDF -> ${genDir}`);
+  if (debugMode) {
+    console.log(`Rasterizing generated PDF -> ${genDir}`);
+  }
   await rasterizePdf(genPdfPath, genDir, totalPages);
+
+  await logPdfPageSize(genPdfPath, 12);
 
   await ensureDir(genNormDir);
   await ensureDir(diffDir);
