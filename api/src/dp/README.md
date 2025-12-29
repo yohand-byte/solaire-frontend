@@ -12,7 +12,7 @@ This module generates DP PDF packs with Qualiwatt-like layout and cartography.
   - Run: `node src/dp/cli.ts "14 Rue Emile Nicol, 14430 Dozule"`
 
 ## Output
-- Images and final PDF are written to `api/dp-output/<timestamp>/`.
+- Images and final PDF are written to `api/dp-output/<timestamp>/dp-qualiwatt.pdf`.
 
 ## Notes
 - Fonts: Noto Sans (OFL), stored in `src/dp/assets/fonts/`.
