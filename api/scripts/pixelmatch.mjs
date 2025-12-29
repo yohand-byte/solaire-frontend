@@ -3,24 +3,29 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
-import sharp from 'sharp';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const referenceDir = path.join(rootDir, 'reference');
 const refDir = path.join(referenceDir, '_pixelmatch', 'ref');
+const genDir = path.join(referenceDir, '_pixelmatch', 'gen');
 const diffDir = path.join(referenceDir, '_pixelmatch', 'diff');
 
+const REF_PDF = path.join(referenceDir, 'DP_Dossier_Complet.pdf');
+const DEFAULT_DPI = 200;
 const DEFAULT_PAGES = 12;
+const execFileAsync = promisify(execFile);
 
 function pad2(value) {
   return String(value).padStart(2, '0');
 }
 
-async function readPngWithBuffer(filePath) {
+async function readPng(filePath) {
   const buffer = await fs.readFile(filePath);
-  return { buffer, png: PNG.sync.read(buffer) };
+  return PNG.sync.read(buffer);
 }
 
 async function writePng(filePath, png) {
@@ -31,38 +36,70 @@ async function ensureDir(dirPath) {
   await fs.mkdir(dirPath, { recursive: true });
 }
 
-async function comparePage(pageNumber) {
-  const refName = `page-${pad2(pageNumber)}.png`;
-  const testName = `qual_test_page${pageNumber}.png`;
-  const refPath = path.join(refDir, refName);
-  const testPath = path.join(referenceDir, testName);
-  const diffPath = path.join(diffDir, `diff-${pad2(pageNumber)}.png`);
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  const [ref, test] = await Promise.all([readPngWithBuffer(refPath), readPngWithBuffer(testPath)]);
-  const refPng = ref.png;
-  let testPng = test.png;
+async function normalizePdftoppmOutput(outDir, totalPages) {
+  for (let page = 1; page <= totalPages; page += 1) {
+    const padded = pad2(page);
+    const target = path.join(outDir, `page-${padded}.png`);
+    const legacy = path.join(outDir, `page-${page}.png`);
+    const paddedPath = path.join(outDir, `page-${padded}.png`);
 
-  if (refPng.width !== testPng.width || refPng.height !== testPng.height) {
-    const refRatio = refPng.width / refPng.height;
-    const testRatio = testPng.width / testPng.height;
-    const rotatedRatio = testPng.height / testPng.width;
-    const shouldRotate = Math.abs(rotatedRatio - refRatio) < 0.02;
-
-    let transformer = sharp(test.buffer);
-    if (shouldRotate) {
-      transformer = transformer.rotate(90);
+    let source = null;
+    if (await fileExists(legacy)) {
+      source = legacy;
+    } else if (await fileExists(paddedPath)) {
+      source = paddedPath;
     }
 
-    const resizedBuffer = await transformer
-      .resize(refPng.width, refPng.height, { fit: 'fill' })
-      .png()
-      .toBuffer();
+    if (!source) {
+      throw new Error(`Missing rasterized page-${padded}.png in ${outDir}`);
+    }
 
-    testPng = PNG.sync.read(resizedBuffer);
+    if (source !== target) {
+      await fs.rm(target, { force: true });
+      await fs.rename(source, target);
+    }
+  }
+}
 
-    const ratioNote = shouldRotate ? 'rotated+resized' : 'resized';
-    console.log(
-      `page-${pad2(pageNumber)}: size mismatch ref ${refPng.width}x${refPng.height} vs test ${testPng.width}x${testPng.height} -> ${ratioNote}`
+async function rasterizePdf(pdfPath, outDir, totalPages) {
+  await ensureDir(outDir);
+  const prefix = path.join(outDir, 'page');
+
+  await execFileAsync('pdftoppm', [
+    '-r',
+    String(DEFAULT_DPI),
+    '-png',
+    '-f',
+    '1',
+    '-l',
+    String(totalPages),
+    pdfPath,
+    prefix,
+  ]);
+
+  await normalizePdftoppmOutput(outDir, totalPages);
+}
+
+async function comparePage(pageNumber) {
+  const refName = `page-${pad2(pageNumber)}.png`;
+  const refPath = path.join(refDir, refName);
+  const testPath = path.join(genDir, refName);
+  const diffPath = path.join(diffDir, `diff-${pad2(pageNumber)}.png`);
+
+  const [refPng, testPng] = await Promise.all([readPng(refPath), readPng(testPath)]);
+
+  if (refPng.width !== testPng.width || refPng.height !== testPng.height) {
+    throw new Error(
+      `Size mismatch for page-${pad2(pageNumber)}: ref ${refPng.width}x${refPng.height} vs gen ${testPng.width}x${testPng.height}`
     );
   }
 
@@ -94,13 +131,37 @@ async function comparePage(pageNumber) {
 }
 
 async function main() {
-  const pageArg = process.argv[2];
+  const genPdfArg = process.argv[2];
+  const pageArg = process.argv[3];
   const totalPages = pageArg ? Number(pageArg) : DEFAULT_PAGES;
 
-  if (!Number.isInteger(totalPages) || totalPages <= 0) {
-    console.error('Usage: node scripts/pixelmatch.mjs [totalPages]');
+  if (!genPdfArg) {
+    console.error('Usage: node scripts/pixelmatch.mjs <generatedPdfPath> [totalPages]');
     process.exit(1);
   }
+
+  if (!Number.isInteger(totalPages) || totalPages <= 0) {
+    console.error('totalPages must be a positive integer');
+    process.exit(1);
+  }
+
+  const genPdfPath = path.isAbsolute(genPdfArg) ? genPdfArg : path.join(rootDir, genPdfArg);
+
+  if (!(await fileExists(REF_PDF))) {
+    console.error(`Missing reference PDF: ${REF_PDF}`);
+    process.exit(1);
+  }
+
+  if (!(await fileExists(genPdfPath))) {
+    console.error(`Missing generated PDF: ${genPdfPath}`);
+    process.exit(1);
+  }
+
+  console.log(`Rasterizing reference PDF -> ${refDir}`);
+  await rasterizePdf(REF_PDF, refDir, totalPages);
+
+  console.log(`Rasterizing generated PDF -> ${genDir}`);
+  await rasterizePdf(genPdfPath, genDir, totalPages);
 
   await ensureDir(diffDir);
 
