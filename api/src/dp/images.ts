@@ -34,6 +34,12 @@ export type Dp1OverlayMaps = {
   ortho1000: string;
 };
 
+export type Dp2Maps = {
+  ortho: string;
+  cadastre: string;
+  avant: string;
+};
+
 export async function generateIgnMap(spec: MapSpec): Promise<string> {
   const { bbox, widthPx, heightPx } = bboxFromScale(spec.center, spec.scale, spec.frame, spec.dpi);
 
@@ -124,4 +130,48 @@ export async function generateDp1Overlays(
   await overlaySvgsOnImage(maps.plan1000, [{ svg: arrowSvg }], planOverlay);
 
   return { plan1000: planOverlay, ortho1000: orthoOverlay };
+}
+
+export async function generateDp2Cadastre(
+  center: LambertPoint,
+  outDir: string,
+  frame: MapFrame,
+  scale: number,
+  dpi = 300
+): Promise<Dp2Maps> {
+  const orthoPath = path.join(outDir, 'dp2-ortho.jpg');
+  const cadastrePath = path.join(outDir, 'dp2-cadastre.png');
+  const avantPath = path.join(outDir, 'dp2-avant.png');
+
+  await generateIgnMap({
+    center,
+    scale,
+    frame,
+    dpi,
+    layer: 'ORTHOIMAGERY.ORTHOPHOTOS',
+    format: 'image/jpeg',
+    outPath: orthoPath,
+  });
+
+  await generateIgnMap({
+    center,
+    scale,
+    frame,
+    dpi,
+    layer: 'CADASTRALPARCELS.PARCELLAIRE_EXPRESS',
+    format: 'image/png',
+    transparent: true,
+    outPath: cadastrePath,
+  });
+
+  const cadastreBuffer = await sharp(cadastrePath)
+    .ensureAlpha()
+    .toBuffer();
+
+  await sharp(orthoPath)
+    .composite([{ input: cadastreBuffer, opacity: 0.55 }])
+    .png()
+    .toFile(avantPath);
+
+  return { ortho: orthoPath, cadastre: cadastrePath, avant: avantPath };
 }
