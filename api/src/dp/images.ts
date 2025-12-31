@@ -204,27 +204,72 @@ export async function generateDp2Cadastre(
 
 export async function fetchStreetViewImage(options: StreetViewOptions): Promise<string> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+  async function writePlaceholder(reason: string): Promise<string> {
+    const safe = (reason || 'indisponible').replace(/[<>]/g, '');
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.height}">
+  <rect width="100%" height="100%" fill="#F3F4F6"/>
+  <rect x="24" y="24" width="${options.width - 48}" height="${options.height - 48}" rx="16" fill="#FFFFFF" stroke="#D1D5DB"/>
+  <text x="50%" y="46%" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" fill="#111827" font-weight="700">
+    Street View indisponible
+  </text>
+  <text x="50%" y="54%" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#374151">
+    ${safe}
+  </text>
+  <text x="50%" y="62%" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#6B7280">
+    ${options.lat.toFixed(6)}, ${options.lon.toFixed(6)}
+  </text>
+</svg>`.trim();
+
+    await sharp({
+      create: {
+        width: options.width,
+        height: options.height,
+        channels: 3,
+        background: { r: 243, g: 244, b: 246 },
+      },
+    })
+      .composite([{ input: Buffer.from(svg) }])
+      .jpeg({ quality: 88 })
+      .toFile(options.outPath);
+
+    return options.outPath;
+  }
+
   if (!apiKey) {
-    throw new Error('GOOGLE_MAPS_API_KEY manquant');
+    return writePlaceholder('clé GOOGLE_MAPS_API_KEY manquante');
   }
 
   const url = 'https://maps.googleapis.com/maps/api/streetview';
-  const response = await axios.get(url, {
-    responseType: 'arraybuffer',
-    timeout: 30000,
-    params: {
-      size: `${options.width}x${options.height}`,
-      location: `${options.lat},${options.lon}`,
-      fov: options.fov,
-      pitch: options.pitch,
-      heading: options.heading,
-      key: apiKey,
-    },
-  });
 
-  await fs.writeFile(options.outPath, Buffer.from(response.data));
-  return options.outPath;
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      params: {
+        size: `${options.width}x${options.height}`,
+        location: `${options.lat},${options.lon}`,
+        fov: options.fov,
+        pitch: options.pitch,
+        heading: options.heading,
+        key: apiKey,
+      },
+      validateStatus: () => true,
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      return writePlaceholder(`Google StreetView HTTP ${response.status}`);
+    }
+
+    await fs.writeFile(options.outPath, Buffer.from(response.data));
+    return options.outPath;
+  } catch (error: any) {
+    const msg = (error && (error.message || String(error))) || 'erreur inconnue';
+    return writePlaceholder(msg);
+  }
 }
+
 
 export async function generateDp7Dp8(
   lat: number,
