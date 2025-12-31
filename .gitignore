@@ -33,3 +33,5 @@ api/server.js.bak2
 api/server.js.bak3
 firebase.json.bak.*
 functions/env.yaml
+
+.firebase/
