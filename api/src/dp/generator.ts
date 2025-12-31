@@ -4,6 +4,7 @@ import path from 'path';
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
 
+import { getParcelRef } from './cadastre';
 import { geocodeAddress, toLambert93 } from './geo';
 import {
   generateDp1Maps,
@@ -14,6 +15,7 @@ import {
   generateDp7Dp8,
   generateIgnMap,
 } from './images';
+import type { Dp1ManualOverlayOptions } from './images';
 import {
   addDp1Overlays,
   overlaySvgsOnImage,
@@ -38,6 +40,27 @@ import {
 export type DpOptions = {
   outputDir?: string;
   dpi?: number;
+  overlays?: {
+    dp1?: Dp1ManualOverlayOptions;
+  };
+  cover?: {
+    title?: string;
+    installerName?: string;
+    ownerName?: string;
+    logo?: {
+      buffer: Buffer;
+      width?: number;
+      height?: number;
+    };
+  };
+  project?: {
+    powerKw?: number | string;
+    surfaceM2?: number | string;
+    panelType?: string;
+    roofType?: string;
+    orientation?: string;
+    slope?: string;
+  };
 };
 
 export type DpAssets = {
@@ -76,10 +99,10 @@ const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
 const CONTENT_HEIGHT = CONTENT_BOTTOM - CONTENT_TOP;
 
 const DP1_GAP = 16;
-const DP1_MAP_HEIGHT = 240;
+const DP1_MAP_HEIGHT = 420;
 const DP1_MAP_WIDTH = (CONTENT_WIDTH - DP1_GAP) / 2;
 
-const DP1_SINGLE_HEIGHT = 380;
+const DP1_SINGLE_HEIGHT = 560;
 const DP1_SINGLE_WIDTH = CONTENT_WIDTH;
 
 const DP2_MAP_HEIGHT = 380;
@@ -106,15 +129,47 @@ function drawImageBox(doc: PDFDocument, imagePath: string, x: number, y: number,
   doc.image(imagePath, x, y, { width, height });
 }
 
-function renderCoverPage(doc: PDFDocument, title: string, address: string): void {
+function renderCoverPage(
+  doc: PDFDocument,
+  title: string,
+  address: string,
+  cover?: DpOptions['cover']
+): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DECLARATION PREALABLE');
+
+  if (cover?.logo?.buffer) {
+    const logoWidth = cover.logo.width || 140;
+    const logoHeight = cover.logo.height || 60;
+    const logoX = CONTENT_LEFT;
+    const logoY = FRAME_MARGIN_PT + 28;
+    try {
+      doc.image(cover.logo.buffer, logoX, logoY, {
+        fit: [logoWidth, logoHeight],
+        align: 'left',
+        valign: 'center',
+      });
+    } catch {
+      // Ignore invalid logo buffers.
+    }
+  }
 
   setBoldFont(doc, 18);
   doc.text(title, 0, CONTENT_TOP + 10, { align: 'center', width: PAGE_WIDTH_PT });
 
   setBodyFont(doc, 11);
   doc.text(address, 0, CONTENT_TOP + 45, { align: 'center', width: PAGE_WIDTH_PT });
+
+  if (cover?.installerName || cover?.ownerName) {
+    const lines = [
+      cover.installerName ? `Installateur : ${cover.installerName}` : null,
+      cover.ownerName ? `Maitre d'ouvrage : ${cover.ownerName}` : null,
+    ].filter(Boolean);
+    if (lines.length) {
+      setBodyFont(doc, 10);
+      doc.text(lines.join('\n'), 0, CONTENT_TOP + 65, { align: 'center', width: PAGE_WIDTH_PT });
+    }
+  }
 
   doc
     .lineWidth(0.8)
@@ -273,6 +328,22 @@ function renderDp8Page(doc: PDFDocument, imagePath: string): void {
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
 }
 
+function renderDp7Dp8Page(doc: PDFDocument, dp7Path: string, dp8Path: string): void {
+  drawFrame(doc);
+  drawTopTitle(doc, 'DP7/DP8 - PHOTOGRAPHIES');
+  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Vues terrain', right: 'DP7-8' });
+
+  const mapY = CONTENT_TOP + 24;
+  const halfHeight = Math.round(DP7_MAP_HEIGHT * 0.48);
+
+  drawLabelBox(doc, 'DP7 - Vue de près', CONTENT_LEFT, mapY - 18, CONTENT_WIDTH);
+  drawImageBox(doc, dp7Path, CONTENT_LEFT, mapY, CONTENT_WIDTH, halfHeight);
+
+  const secondY = mapY + halfHeight + 26;
+  drawLabelBox(doc, 'DP8 - Vue de loin', CONTENT_LEFT, secondY - 18, CONTENT_WIDTH);
+  drawImageBox(doc, dp8Path, CONTENT_LEFT, secondY, CONTENT_WIDTH, halfHeight);
+}
+
 function renderDp11Page(doc: PDFDocument, noticeText: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP11 - NOTICE DESCRIPTIVE');
@@ -304,6 +375,26 @@ function buildNoticeText(data: { city: string; parcelRef: string; orientation: s
     '',
     'Aucun arbre ne sera abattu.',
   ].join('\n');
+}
+
+function formatKw(value: number | string | undefined, fallback: string): string {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  if (typeof value === 'number') {
+    return `${value} kWc`;
+  }
+  return value;
+}
+
+function formatSurface(value: number | string | undefined, fallback: string): string {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  if (typeof value === 'number') {
+    return `${value} m2`;
+  }
+  return value;
 }
 
 async function addPanelsOverlay(basePath: string, outPath: string): Promise<string> {
@@ -350,6 +441,8 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
 
   const geocoded = await geocodeAddress(address);
   const center = toLambert93({ lat: geocoded.lat, lon: geocoded.lon });
+  const parcelInfo = await getParcelRef(geocoded.lat, geocoded.lon, geocoded.citycode);
+  const parcelRef = parcelInfo?.ref || 'XX 0000';
 
   const dp1Frames = {
     frame1000: { widthMm: ptToMm(DP1_MAP_WIDTH), heightMm: ptToMm(DP1_MAP_HEIGHT) },
@@ -358,7 +451,7 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   };
 
   const dp1Maps = await generateDp1Maps(center, outputDir, dp1Frames, dpi);
-  const dp1Overlays = await generateDp1Overlays(dp1Maps, outputDir);
+  const dp1Overlays = await generateDp1Overlays(dp1Maps, outputDir, options.overlays?.dp1);
 
   const dp1Plan2000Overlay = path.join(outputDir, 'dp1-plan-2000-overlay.png');
   const dp1Plan5000Overlay = path.join(outputDir, 'dp1-plan-5000-overlay.png');
@@ -417,60 +510,87 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   };
 
   const pdfPath = path.join(outputDir, 'dp-qualiwatt.pdf');
-  const doc = new PDFDocument({ size: [PAGE_WIDTH_PT, PAGE_HEIGHT_PT], margin: 0 });
+  const doc = new PDFDocument({ autoFirstPage: false });
+  const pdfStream = fs.createWriteStream(pdfPath);
 
   registerFonts(doc);
-  doc.pipe(fs.createWriteStream(pdfPath));
+  doc.pipe(pdfStream);
 
-  renderCoverPage(doc, 'Installation photovoltaique', geocoded.label);
+  const addPage = (): void => {
+    doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+  };
 
-  doc.addPage();
+  const coverTitle = options.cover?.title || 'Installation photovoltaique';
+  const installerName = options.cover?.installerName;
+  const ownerName = options.cover?.ownerName;
+
+  const powerKw = formatKw(options.project?.powerKw, '9 kWc');
+  const surfaceM2 = formatSurface(options.project?.surfaceM2, '40 m2');
+  const panelType = options.project?.panelType || 'Noirs mats';
+  const roofType = options.project?.roofType || 'Tuiles';
+  const orientation = options.project?.orientation || 'Sud';
+  const slope = options.project?.slope || '30 degres';
+
+  addPage();
+  renderCoverPage(doc, coverTitle, geocoded.label, {
+    logo: options.cover?.logo,
+    installerName,
+    ownerName,
+  });
+
+  addPage();
   renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000);
 
-  doc.addPage();
+  addPage();
   renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/2000', assets.dp1.plan2000);
 
-  doc.addPage();
+  addPage();
   renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/5000', assets.dp1.plan5000);
 
-  doc.addPage();
+  addPage();
   renderDp2Page(doc, 'DP2 - PLAN DE MASSE AVANT', '1/250', assets.dp2.avant);
 
-  doc.addPage();
+  addPage();
   renderDp2Page(doc, 'DP2 - PLAN DE MASSE APRES', '1/250', assets.dp2.apres);
 
-  doc.addPage();
+  addPage();
   renderDp4Page(
     doc,
     {
       address: geocoded.label,
-      parcelRef: 'XX 0000',
-      powerKw: '9 kWc',
-      surfaceM2: '40 m2',
-      panelType: 'Noirs mats',
-      roofType: 'Tuiles',
-      orientation: 'Sud',
-      slope: '30 degres',
+      parcelRef,
+      powerKw,
+      surfaceM2,
+      panelType,
+      roofType,
+      orientation,
+      slope,
     },
     assets.dp4.ortho
   );
 
-  doc.addPage();
+  addPage();
   renderDp5Page(doc, assets.dp5.ortho);
 
-  doc.addPage();
+  addPage();
   renderDp6Page(doc, assets.dp6.view);
 
-  doc.addPage();
-  renderDp7Page(doc, assets.dp7.view);
+  addPage();
+  renderDp7Dp8Page(doc, assets.dp7.view, assets.dp8.view);
 
-  doc.addPage();
-  renderDp8Page(doc, assets.dp8.view);
-
-  doc.addPage();
-  renderDp11Page(doc, buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef: 'XX 0000', orientation: 'SUD' }));
+  addPage();
+  renderDp11Page(
+    doc,
+    buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef, orientation: orientation.toUpperCase() })
+  );
 
   doc.end();
+
+  await new Promise<void>((resolve, reject) => {
+    pdfStream.on('finish', resolve);
+    pdfStream.on('error', reject);
+    doc.on('error', reject);
+  });
 
   return pdfPath;
 }

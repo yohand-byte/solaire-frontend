@@ -50,6 +50,85 @@ export function svgCenterPoint(
 `.trim();
 }
 
+export function svgHandDrawnCircle(
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  stroke = '#DC2626',
+  strokeWidth = 4
+): string {
+  const offset = Math.max(2, Math.round(radius * 0.04));
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+  <circle
+    cx="${centerX - offset}"
+    cy="${centerY + offset}"
+    r="${radius}"
+    fill="none"
+    stroke="${stroke}"
+    stroke-width="${strokeWidth}"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.85"
+  />
+  <circle
+    cx="${centerX + offset}"
+    cy="${centerY - offset}"
+    r="${radius}"
+    fill="none"
+    stroke="${stroke}"
+    stroke-width="${Math.max(2, strokeWidth - 1)}"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.6"
+  />
+</svg>
+`.trim();
+}
+
+export function svgCurvedArrow(
+  width: number,
+  height: number,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  bend: number,
+  stroke = '#DC2626',
+  strokeWidth = 5
+): string {
+  const midX = (startX + endX) / 2;
+  const midY = (startY + endY) / 2 - bend;
+  const c1x = (startX + midX) / 2;
+  const c1y = (startY + midY) / 2;
+  const c2x = (endX + midX) / 2;
+  const c2y = (endY + midY) / 2;
+
+  const angle = Math.atan2(endY - c2y, endX - c2x);
+  const headLength = Math.max(10, strokeWidth * 3.5);
+  const headAngle = Math.PI / 7;
+  const x1 = endX - headLength * Math.cos(angle - headAngle);
+  const y1 = endY - headLength * Math.sin(angle - headAngle);
+  const x2 = endX - headLength * Math.cos(angle + headAngle);
+  const y2 = endY - headLength * Math.sin(angle + headAngle);
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+  <path
+    d="M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}"
+    fill="none"
+    stroke="${stroke}"
+    stroke-width="${strokeWidth}"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <polygon points="${endX},${endY} ${x1},${y1} ${x2},${y2}" fill="${stroke}" />
+</svg>
+`.trim();
+}
+
 export function svgNorthArrow(width: number, height: number, size: number, x: number, y: number): string {
   const arrowHeight = size;
   const arrowWidth = Math.round(size * 0.6);
@@ -93,7 +172,11 @@ export async function overlaySvgsOnImage(
   return outPath;
 }
 
-export async function addDp1Overlays(basePath: string, outPath: string): Promise<string> {
+export async function addDp1Overlays(
+  basePath: string,
+  outPath: string,
+  extraOverlays: OverlaySpec[] = []
+): Promise<string> {
   const meta = await sharp(basePath).metadata();
   const width = meta.width || 0;
   const height = meta.height || 0;
@@ -111,6 +194,7 @@ export async function addDp1Overlays(basePath: string, outPath: string): Promise
     { svg: svgDottedCircle(width, height, centerX, centerY, circleRadius) },
     { svg: svgCenterPoint(width, height, centerX, centerY, pointRadius) },
     { svg: svgNorthArrow(width, height, arrowSize, arrowX, arrowY) },
+    ...extraOverlays,
   ];
 
   return overlaySvgsOnImage(basePath, overlays, outPath);

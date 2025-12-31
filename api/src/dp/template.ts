@@ -1,8 +1,8 @@
 import path from 'path';
 import type PDFDocument from 'pdfkit';
 
-export const PAGE_WIDTH_PT = 595.28;
-export const PAGE_HEIGHT_PT = 841.89;
+export const PAGE_WIDTH_PT = 841.89;
+export const PAGE_HEIGHT_PT = 595.28;
 
 export const FRAME_MARGIN_PT = 18;
 export const TITLE_COLOR = '#1E3A8A';

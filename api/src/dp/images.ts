@@ -6,8 +6,9 @@ import type { MapFrame, WmsRequest } from './ign';
 import { bboxFromScale, saveWmsImage } from './ign';
 import axios from 'axios';
 import {
-  addDp1Overlays,
   overlaySvgsOnImage,
+  svgCurvedArrow,
+  svgHandDrawnCircle,
   svgHouseOutline,
   svgInfoBox,
   svgLegendBox,
@@ -44,6 +45,21 @@ export type Dp1OverlayMaps = {
   ortho1000: string;
 };
 
+export type Dp1ManualOverlayOptions = {
+  circle?: {
+    xRatio: number;
+    yRatio: number;
+    radiusRatio: number;
+  };
+  arrow?: {
+    startXRatio: number;
+    startYRatio: number;
+    endXRatio: number;
+    endYRatio: number;
+    bendRatio?: number;
+  };
+};
+
 export type Dp2Maps = {
   ortho: string;
   cadastre: string;
@@ -59,6 +75,12 @@ export type StreetViewOptions = {
   pitch: number;
   heading: number;
   outPath: string;
+};
+
+export type StreetViewResult = {
+  path: string;
+  width: number;
+  height: number;
 };
 
 export type Dp7Dp8Images = {
@@ -138,12 +160,56 @@ export async function generateDp1Maps(
 
 export async function generateDp1Overlays(
   maps: Dp1Maps,
-  outDir: string
+  outDir: string,
+  manual?: Dp1ManualOverlayOptions
 ): Promise<Dp1OverlayMaps> {
   const planOverlay = path.join(outDir, 'dp1-plan-1000-overlay.png');
   const orthoOverlay = path.join(outDir, 'dp1-ortho-1000-overlay.png');
 
-  await addDp1Overlays(maps.ortho1000, orthoOverlay);
+  const orthoMeta = await sharp(maps.ortho1000).metadata();
+  const orthoWidth = orthoMeta.width || 0;
+  const orthoHeight = orthoMeta.height || 0;
+
+  const circle = manual?.circle || { xRatio: 0.56, yRatio: 0.52, radiusRatio: 0.1 };
+  const arrow = manual?.arrow || {
+    startXRatio: 0.18,
+    startYRatio: 0.72,
+    endXRatio: 0.52,
+    endYRatio: 0.58,
+    bendRatio: 0.12,
+  };
+
+  const circleX = Math.round(orthoWidth * circle.xRatio);
+  const circleY = Math.round(orthoHeight * circle.yRatio);
+  const circleRadius = Math.round(Math.min(orthoWidth, orthoHeight) * circle.radiusRatio);
+
+  const arrowStartX = Math.round(orthoWidth * arrow.startXRatio);
+  const arrowStartY = Math.round(orthoHeight * arrow.startYRatio);
+  const arrowEndX = Math.round(orthoWidth * arrow.endXRatio);
+  const arrowEndY = Math.round(orthoHeight * arrow.endYRatio);
+  const arrowBend = Math.round(Math.min(orthoWidth, orthoHeight) * (arrow.bendRatio || 0.12));
+
+  const orthoArrowSize = Math.round(Math.min(orthoWidth, orthoHeight) * 0.12);
+  const orthoArrowX = Math.round(orthoWidth - orthoArrowSize * 0.8 - 20);
+  const orthoArrowY = 24;
+
+  const orthoOverlays = [
+    { svg: svgHandDrawnCircle(orthoWidth, orthoHeight, circleX, circleY, circleRadius) },
+    {
+      svg: svgCurvedArrow(
+        orthoWidth,
+        orthoHeight,
+        arrowStartX,
+        arrowStartY,
+        arrowEndX,
+        arrowEndY,
+        arrowBend
+      ),
+    },
+    { svg: svgNorthArrow(orthoWidth, orthoHeight, orthoArrowSize, orthoArrowX, orthoArrowY) },
+  ];
+
+  await overlaySvgsOnImage(maps.ortho1000, orthoOverlays, orthoOverlay);
 
   const meta = await sharp(maps.plan1000).metadata();
   const width = meta.width || 0;
@@ -202,10 +268,10 @@ export async function generateDp2Cadastre(
   return { ortho: orthoPath, cadastre: cadastrePath, avant: avantPath };
 }
 
-export async function fetchStreetViewImage(options: StreetViewOptions): Promise<string> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+export async function fetchStreetViewImage(options: StreetViewOptions): Promise<StreetViewResult> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
 
-  async function writePlaceholder(reason: string): Promise<string> {
+  async function writePlaceholder(reason: string): Promise<StreetViewResult> {
     const safe = (reason || 'indisponible').replace(/[<>]/g, '');
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.height}">
@@ -234,7 +300,12 @@ export async function fetchStreetViewImage(options: StreetViewOptions): Promise<
       .jpeg({ quality: 88 })
       .toFile(options.outPath);
 
-    return options.outPath;
+    const meta = await sharp(options.outPath).metadata();
+    return {
+      path: options.outPath,
+      width: meta.width || options.width,
+      height: meta.height || options.height,
+    };
   }
 
   if (!apiKey) {
@@ -263,7 +334,12 @@ export async function fetchStreetViewImage(options: StreetViewOptions): Promise<
     }
 
     await fs.writeFile(options.outPath, Buffer.from(response.data));
-    return options.outPath;
+    const meta = await sharp(options.outPath).metadata();
+    return {
+      path: options.outPath,
+      width: meta.width || options.width,
+      height: meta.height || options.height,
+    };
   } catch (error: any) {
     const msg = (error && (error.message || String(error))) || 'erreur inconnue';
     return writePlaceholder(msg);
@@ -375,7 +451,7 @@ export async function generateDp6(
   const basePath = path.join(outDir, 'dp6-streetview.jpg');
   const outPath = path.join(outDir, 'dp6-streetview-panels.png');
 
-  await fetchStreetViewImage({
+  const base = await fetchStreetViewImage({
     lat,
     lon,
     width,
@@ -386,10 +462,13 @@ export async function generateDp6(
     outPath: basePath,
   });
 
-  const panelWidth = Math.round(width * 0.12);
-  const panelHeight = Math.round(height * 0.06);
-  const startX = Math.round(width * 0.43);
-  const startY = Math.round(height * 0.48);
+  const actualWidth = base.width;
+  const actualHeight = base.height;
+
+  const panelWidth = Math.round(actualWidth * 0.12);
+  const panelHeight = Math.round(actualHeight * 0.06);
+  const startX = Math.round(actualWidth * 0.43);
+  const startY = Math.round(actualHeight * 0.48);
 
   const panels = [
     { x: startX, y: startY, width: panelWidth, height: panelHeight },
@@ -399,13 +478,13 @@ export async function generateDp6(
   ];
 
   const overlays = [
-    { svg: svgPanelRects(width, height, panels) },
+    { svg: svgPanelRects(actualWidth, actualHeight, panels) },
     {
       svg: svgInfoBox(
-        width,
-        height,
-        Math.round(width * 0.05),
-        Math.round(height * 0.08),
+        actualWidth,
+        actualHeight,
+        Math.round(actualWidth * 0.05),
+        Math.round(actualHeight * 0.08),
         220,
         80,
         'Installation projete',
@@ -414,6 +493,6 @@ export async function generateDp6(
     },
   ];
 
-  await overlaySvgsOnImage(basePath, overlays, outPath);
+  await overlaySvgsOnImage(base.path, overlays, outPath);
   return outPath;
 }

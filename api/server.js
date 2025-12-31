@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const admin = require("firebase-admin");
+const sharp = require("sharp");
 
 
 // Google API Key
@@ -39,7 +41,11 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "X-Api-Token", "X-ADMIN-KEY", "Authorization"]
 }));
-app.use(express.json());
+app.use(express.json({ limit: "6mb" }));
+app.use('/dp', express.static(path.join(__dirname, 'public', 'dp-generator')));
+app.get("/", (req, res) => {
+  res.send('API v2.0 en ligne. Endpoints: /health, /api/*, UI statique: /dp/');
+});
 
 // Auth middleware
 const requireApiToken = (req, res, next) => {
@@ -1006,8 +1012,6 @@ app.get(["/workflow-config", "/api/workflow-config"], (req, res) => {
 
 const { Storage } = require('@google-cloud/storage');
 const Busboy = require('busboy');
-const path = require('path');
-
 const storage = new Storage();
 const BUCKET_NAME = 'solaire-facile-documents';
 
@@ -1155,8 +1159,9 @@ app.delete(["/documents/:id", "/api/documents/:id"], requireApiToken, async (req
 // ═══════════════════════════════════════════════════════════
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`API v2.0 running on port ${PORT}`);
+const HOST = process.env.HOST || "127.0.0.1";
+app.listen(PORT, HOST, () => {
+  console.log(`API v2.0 running on http://${HOST}:${PORT}`);
 });
 
 // Save document metadata (après upload Firebase Storage direct)
@@ -1227,6 +1232,99 @@ app.delete(["/leads/:id", "/api/leads/:id"], requireApiToken, async (req, res) =
 // DP GENERATOR - Dossier Déclaration Préalable automatique
 // ═══════════════════════════════════════════════════════════
 const dpGenerator = require('./dp-generator');
+
+function parseDataUrl(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string') {
+    return null;
+  }
+  const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if (!match) {
+    return null;
+  }
+  const mime = match[1];
+  const content = match[2];
+  try {
+    return {
+      buffer: Buffer.from(content, 'base64'),
+      mime,
+    };
+  } catch {
+    return null;
+  }
+}
+
+app.get(['/cadastre', '/api/cadastre'], async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lon = parseFloat(req.query.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return res.status(400).json({ success: false, error: 'coordonnees_invalides' });
+    }
+
+    const data = await dpGenerator.getCadastreInfo(lat, lon);
+    if (!data || !data.success) {
+      return res.json({ success: false, error: data?.error || 'Parcelle non trouvee' });
+    }
+
+    return res.json({
+      success: true,
+      parcelle: data.parcelle || '',
+      feuille: data.feuille || '',
+      section: data.section || '',
+      commune: data.commune || '',
+      codeInsee: data.codeInsee || '',
+      ref: data.ref || '',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post(['/generate-dp', '/api/generate-dp'], async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const address = `${payload.adresse || ''}, ${payload.codePostal || ''} ${payload.ville || ''}`.trim();
+    if (!address || address === ',') {
+      return res.status(400).json({ error: 'Adresse requise' });
+    }
+
+    const logoData = parseDataUrl(payload.logoDataUrl);
+    let logoBuffer = logoData?.buffer || null;
+    if (logoBuffer && logoData?.mime === 'image/svg+xml') {
+      try {
+        logoBuffer = await sharp(logoBuffer).png().toBuffer();
+      } catch {
+        logoBuffer = null;
+      }
+    }
+    const pdfBuffer = await dpGenerator.generateDPDocument(
+      {
+        beneficiary: {
+          lastName: payload.maitreOuvrage,
+          address: {
+            street: payload.adresse,
+            postalCode: payload.codePostal,
+            city: payload.ville,
+          },
+        },
+      },
+      null,
+      {
+        ...payload,
+        address,
+        logoBuffer,
+      }
+    );
+
+    const safeName = (payload.maitreOuvrage || 'client').replace(/[^a-zA-Z0-9-_]+/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="dossier-dp-${safeName}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('DP Generate UI error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
 
 // Analyse d'une adresse (retourne les données Solar + Cadastre + URLs)
 app.post(['/dp/analyze', '/api/dp/analyze'], requireApiToken, async (req, res) => {
@@ -1355,4 +1453,3 @@ app.post(['/dp/generate', '/api/dp/generate'], requireApiToken, async (req, res)
     res.status(500).json({ error: err.message });
   }
 });
-

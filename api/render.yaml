@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: solaire-dp-generator
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: HOST
+        value: 0.0.0.0
+      # Renseigner la clé Google pour Street View
+      - key: GOOGLE_API_KEY
+        sync: false
+      # Config Firebase (au choix base64 ou JSON direct)
+      - key: FIREBASE_CONFIG_B64
+        sync: false
+      # Token API si nécessaire
+      - key: API_TOKEN
+        sync: false
