@@ -83,3 +83,5 @@ functions/env.yaml
 api/server.js.backup
 api/server.js.bak*
 firebase.json.bak.*
+.DS_Store
+scripts/*.js
