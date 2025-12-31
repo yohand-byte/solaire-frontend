@@ -1,0 +1,12 @@
+.DS_Store
+../.DS_Store
+dp-output/
+*.png
+*.jpg
+*.jpeg
+temp-*
+fixtures/
+
+../.DS_Store
+test-*.js
+../scripts/*.js
