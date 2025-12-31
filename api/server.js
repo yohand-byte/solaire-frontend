@@ -1246,6 +1246,41 @@ app.post(['/dp/analyze', '/api/dp/analyze'], requireApiToken, async (req, res) =
 });
 
 // Génération du dossier DP complet (PDF)
+  
+// Génération DP locale (sans Firestore)
+app.post(['/dp/generate-local', '/api/dp/generate-local'], requireApiToken, async (req, res) => {
+  try {
+    const { address, clientName = 'client-local' } = req.body;
+    if (!address) {
+      return res.status(400).json({ error: 'Adresse requise' });
+    }
+
+    console.log('DP Generate LOCAL for:', address);
+
+    const analysis = await dpGenerator.analyzeAddress(address);
+
+    const project = {
+      id: 'local',
+      beneficiary: {
+        lastName: clientName,
+        address: {}
+      }
+    };
+
+    const pdfBuffer = await dpGenerator.generateDPDocument(project, analysis);
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `dossier-dp-${clientName}-${dateStr}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('DP Generate LOCAL error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post(['/dp/generate', '/api/dp/generate'], requireApiToken, async (req, res) => {
   try {
     const { projectId } = req.body;

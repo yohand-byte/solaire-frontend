@@ -90,22 +90,43 @@ async function getCadastreData(lat, lng) {
 // 4. Street View : URLs des images
 function getStreetViewUrls(lat, lng, address) {
   const base = 'https://maps.googleapis.com/maps/api/streetview';
+  const common = 'size=640x640&scale=2&source=outdoor';
   return {
-    close: `${base}?size=800x600&location=${lat},${lng}&fov=90&pitch=10&key=${GOOGLE_API_KEY}`,
-    far: `${base}?size=800x600&location=${lat},${lng}&fov=120&pitch=5&key=${GOOGLE_API_KEY}`,
-    front: `${base}?size=800x600&location=${encodeURIComponent(address)}&fov=100&pitch=15&key=${GOOGLE_API_KEY}`
+    close: `${base}?${common}&location=${lat},${lng}&fov=90&pitch=10&key=${GOOGLE_API_KEY}`,
+    far: `${base}?${common}&location=${lat},${lng}&fov=120&pitch=5&key=${GOOGLE_API_KEY}`,
+    front: `${base}?${common}&location=${encodeURIComponent(address)}&fov=100&pitch=15&key=${GOOGLE_API_KEY}`
   };
 }
 
-// 5. Maps Static : URLs des cartes
+// 5. Cartographie : Geoportail / IGN (WMS)
+// NOTE: on garde les mêmes clés (satellite_*) pour ne pas casser le reste du code,
+// mais elles pointeront vers des orthophotos IGN (ORTHOIMAGERY.ORTHOPHOTOS).
+function ignWmsUrl(layer, lat, lng, dLat, dLng, width, height, format) {
+  const base = 'https://data.geopf.fr/wms-r/wms';
+  const bbox = `${lat - dLat},${lng - dLng},${lat + dLat},${lng + dLng}`;
+  const fmt = format || 'image/png';
+  return `${base}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${encodeURIComponent(layer)}&STYLES=&CRS=EPSG:4326&BBOX=${bbox}&WIDTH=${width}&HEIGHT=${height}&FORMAT=${encodeURIComponent(fmt)}`;
+}
+
 function getMapUrls(lat, lng) {
-  const base = 'https://maps.googleapis.com/maps/api/staticmap';
+  const W = 1200;
+  const H = 800;
+
   return {
-    satellite_close: `${base}?center=${lat},${lng}&zoom=20&size=800x600&maptype=roadmap&key=${GOOGLE_API_KEY}`,
-    satellite_medium: `${base}?center=${lat},${lng}&zoom=18&size=800x600&maptype=roadmap&key=${GOOGLE_API_KEY}`,
-    satellite_far: `${base}?center=${lat},${lng}&zoom=15&size=800x600&maptype=roadmap&key=${GOOGLE_API_KEY}`,
-    roadmap: `${base}?center=${lat},${lng}&zoom=17&size=800x600&maptype=roadmap&key=${GOOGLE_API_KEY}`,
-    terrain: `${base}?center=${lat},${lng}&zoom=14&size=800x600&maptype=terrain&key=${GOOGLE_API_KEY}`
+    dp1_plan_1000: ignWmsUrl('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', lat, lng, 0.0008, 0.0012, W, H, 'image/png'),
+    dp1_ortho_1000: ignWmsUrl('ORTHOIMAGERY.ORTHOPHOTOS', lat, lng, 0.0008, 0.0012, W, H, 'image/jpeg'),
+    dp1_plan_2000: ignWmsUrl('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', lat, lng, 0.0018, 0.0027, W, H, 'image/png'),
+    dp1_plan_5000: ignWmsUrl('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', lat, lng, 0.0045, 0.0068, W, H, 'image/png'),
+
+    dp2_cadastre: ignWmsUrl('CADASTRALPARCELS.PARCELLAIRE_EXPRESS', lat, lng, 0.0004, 0.0006, W, H, 'image/png'),
+    dp2_ortho: ignWmsUrl('ORTHOIMAGERY.ORTHOPHOTOS', lat, lng, 0.0004, 0.0006, W, H, 'image/jpeg'),
+
+    satellite_close: ignWmsUrl('ORTHOIMAGERY.ORTHOPHOTOS', lat, lng, 0.00015, 0.00025, W, H, 'image/jpeg'),
+    satellite_medium: ignWmsUrl('ORTHOIMAGERY.ORTHOPHOTOS', lat, lng, 0.0008, 0.0012, W, H, 'image/jpeg'),
+    satellite_far: ignWmsUrl('ORTHOIMAGERY.ORTHOPHOTOS', lat, lng, 0.0018, 0.0027, W, H, 'image/jpeg'),
+
+    roadmap: ignWmsUrl('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', lat, lng, 0.0008, 0.0012, W, H, 'image/png'),
+    terrain: ignWmsUrl('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', lat, lng, 0.0045, 0.0068, W, H, 'image/png')
   };
 }
 
