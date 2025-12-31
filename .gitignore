@@ -35,3 +35,12 @@ firebase.json.bak.*
 functions/env.yaml
 
 .firebase/
+
+# App env locals (never commit)
+apps/solaire-facile/.env.local
+apps/solaire-facile/.env.*.local
+
+# Coverage / cache
+coverage/
+.nyc_output/
+.eslintcache
