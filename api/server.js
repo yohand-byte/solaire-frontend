@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
 
+
+// Google API Key
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || "AIzaSyBzJcyMPtHONndrh5EalTIH2ToD_nwBjMQ";
 const app = express();
 
 // ═══════════════════════════════════════════════════════════
@@ -1219,3 +1222,102 @@ app.delete(["/leads/:id", "/api/leads/:id"], requireApiToken, async (req, res) =
     res.status(500).json({ error: err.message });
   }
 });
+
+// ═══════════════════════════════════════════════════════════
+// DP GENERATOR - Dossier Déclaration Préalable automatique
+// ═══════════════════════════════════════════════════════════
+const dpGenerator = require('./dp-generator');
+
+// Analyse d'une adresse (retourne les données Solar + Cadastre + URLs)
+app.post(['/dp/analyze', '/api/dp/analyze'], requireApiToken, async (req, res) => {
+  try {
+    const { address } = req.body;
+    if (!address) {
+      return res.status(400).json({ error: 'Adresse requise' });
+    }
+    
+    console.log('DP Analyze:', address);
+    const analysis = await dpGenerator.analyzeAddress(address);
+    res.json({ ok: true, data: analysis });
+  } catch (err) {
+    console.error('DP Analyze error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Génération du dossier DP complet (PDF)
+app.post(['/dp/generate', '/api/dp/generate'], requireApiToken, async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId requis' });
+    }
+    
+    // Récupérer le projet
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ error: 'Projet non trouvé' });
+    }
+    const project = { id: projectDoc.id, ...projectDoc.data() };
+    
+    // Construire l'adresse
+    const beneficiary = project.beneficiary || {};
+    const addr = beneficiary.address || {};
+    const fullAddress = `${addr.street || ''}, ${addr.postalCode || ''} ${addr.city || ''}`.trim();
+    
+    if (!fullAddress || fullAddress === ', ') {
+      return res.status(400).json({ error: 'Adresse du projet manquante' });
+    }
+    
+    console.log('DP Generate for:', fullAddress);
+    
+    // Analyser l'adresse
+    const analysis = await dpGenerator.analyzeAddress(fullAddress);
+    
+    // Générer le PDF
+    const pdfBuffer = await dpGenerator.generateDPDocument(project, analysis);
+    
+    // Sauvegarder dans Storage
+    const clientName = beneficiary.lastName || 'client';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `dossier-dp-${clientName}-${dateStr}.pdf`;
+    const filePath = `documents/${projectId}/dp/${fileName}`;
+    
+    const file = storage.bucket(BUCKET_NAME).file(filePath);
+    await file.save(pdfBuffer, { metadata: { contentType: 'application/pdf' } });
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filePath}`;
+    
+    // Sauvegarder dans Firestore
+    await db.collection('documents').add({
+      projectId: projectId,
+      stage: 'dp',
+      category: 'dossier-dp',
+      filename: fileName,
+      url: publicUrl,
+      mimeType: 'application/pdf',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    res.json({ 
+      ok: true, 
+      message: 'Dossier DP généré',
+      filename: fileName,
+      url: publicUrl,
+      analysis: {
+        address: analysis.address?.formatted,
+        solar: analysis.solar ? {
+          maxPanels: analysis.solar.maxPanels,
+          roofAreaM2: analysis.solar.roofAreaM2,
+          orientation: analysis.solar.azimuthDegrees,
+          pitch: analysis.solar.pitchDegrees
+        } : null,
+        cadastre: analysis.cadastre
+      }
+    });
+  } catch (err) {
+    console.error('DP Generate error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+

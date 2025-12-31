@@ -5,6 +5,22 @@ import type { LambertPoint } from './geo';
 import type { MapFrame, WmsRequest } from './ign';
 import { bboxFromScale, saveWmsImage } from './ign';
 import axios from 'axios';
+import { ensurePlaceholderImage } from './fallback';
+
+type IgnArgs = Parameters<typeof generateIgnMap>[0];
+
+async function generateIgnMapSafe(args: IgnArgs): Promise<string> {
+  try {
+    await generateIgnMap(args);
+    return args.outPath;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const code = status ? `HTTP ${status}` : (err?.code ?? 'ERREUR');
+    await ensurePlaceholderImage(args.outPath, 1600, 1200, `IGN ${args.layer ?? 'carte'} - ${code}`);
+    return args.outPath;
+  }
+}
+
 import {
   addDp1Overlays,
   overlaySvgsOnImage,
@@ -93,7 +109,7 @@ export async function generateDp1Maps(
   const plan2000 = path.join(outDir, 'dp1-plan-2000.png');
   const plan5000 = path.join(outDir, 'dp1-plan-5000.png');
 
-  await generateIgnMap({
+  await generateIgnMapSafe({
     center,
     scale: 1000,
     frame: frames.frame1000,
@@ -103,7 +119,7 @@ export async function generateDp1Maps(
     outPath: plan1000,
   });
 
-  await generateIgnMap({
+  await generateIgnMapSafe({
     center,
     scale: 1000,
     frame: frames.frame1000,
@@ -113,7 +129,7 @@ export async function generateDp1Maps(
     outPath: ortho1000,
   });
 
-  await generateIgnMap({
+  await generateIgnMapSafe({
     center,
     scale: 2000,
     frame: frames.frame2000,
@@ -123,7 +139,7 @@ export async function generateDp1Maps(
     outPath: plan2000,
   });
 
-  await generateIgnMap({
+  await generateIgnMapSafe({
     center,
     scale: 5000,
     frame: frames.frame5000,
@@ -169,7 +185,7 @@ export async function generateDp2Cadastre(
   const cadastrePath = path.join(outDir, 'dp2-cadastre.png');
   const avantPath = path.join(outDir, 'dp2-avant.png');
 
-  await generateIgnMap({
+  await generateIgnMapSafe({
     center,
     scale,
     frame,
@@ -179,7 +195,7 @@ export async function generateDp2Cadastre(
     outPath: orthoPath,
   });
 
-  await generateIgnMap({
+  await generateIgnMapSafe({
     center,
     scale,
     frame,
@@ -204,27 +220,37 @@ export async function generateDp2Cadastre(
 
 export async function fetchStreetViewImage(options: StreetViewOptions): Promise<string> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const labelBase = `Google Street View (${options.lat.toFixed(5)}, ${options.lon.toFixed(5)})`;
+
   if (!apiKey) {
-    throw new Error('GOOGLE_MAPS_API_KEY manquant');
+    return ensurePlaceholderImage(options.outPath, options.width, options.height, `${labelBase} - API key manquante`);
   }
 
   const url = 'https://maps.googleapis.com/maps/api/streetview';
-  const response = await axios.get(url, {
-    responseType: 'arraybuffer',
-    timeout: 30000,
-    params: {
-      size: `${options.width}x${options.height}`,
-      location: `${options.lat},${options.lon}`,
-      fov: options.fov,
-      pitch: options.pitch,
-      heading: options.heading,
-      key: apiKey,
-    },
-  });
 
-  await fs.writeFile(options.outPath, Buffer.from(response.data));
-  return options.outPath;
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      params: {
+        size: `${options.width}x${options.height}`,
+        location: `${options.lat},${options.lon}`,
+        fov: options.fov,
+        pitch: options.pitch,
+        heading: options.heading,
+        key: apiKey,
+      },
+    });
+
+    await fs.writeFile(options.outPath, Buffer.from(response.data));
+    return options.outPath;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const code = status ? `HTTP ${status}` : (err?.code ?? 'ERREUR');
+    return ensurePlaceholderImage(options.outPath, options.width, options.height, `${labelBase} - ${code}`);
+  }
 }
+
 
 export async function generateDp7Dp8(
   lat: number,
@@ -271,7 +297,7 @@ export async function generateDp5(
   const basePath = path.join(outDir, 'dp5-ortho.jpg');
   const outPath = path.join(outDir, 'dp5-ortho-panels.png');
 
-  await generateIgnMap({
+  await generateIgnMapSafe({
     center,
     scale,
     frame,

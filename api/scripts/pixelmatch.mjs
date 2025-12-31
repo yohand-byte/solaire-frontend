@@ -1,26 +1,21 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { PNG } from 'pngjs';
+#!/usr/bin/env node
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import pixelmatch from 'pixelmatch';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import sharp from 'sharp';
+import { PNG } from 'pngjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootDir = path.resolve(__dirname, '..');
-const referenceDir = path.join(rootDir, 'reference');
-const refDir = path.join(referenceDir, '_pixelmatch', 'ref');
-const genDir = path.join(referenceDir, '_pixelmatch', 'gen');
-const genNormDir = path.join(referenceDir, '_pixelmatch', 'gen_norm');
-const diffDir = path.join(referenceDir, '_pixelmatch', 'diff');
+const OUT_DIR = path.join(process.cwd(), 'tmp/_pixelmatch');
+const refDir = path.join(OUT_DIR, 'ref');
+const genDir = path.join(OUT_DIR, 'gen');
+const diffDir = path.join(OUT_DIR, 'diff');
 
-const REF_PDF = path.join(referenceDir, 'DP_Dossier_Complet.pdf');
+const DEFAULT_REF_PDF = path.join(process.cwd(), 'fixtures/dp-demo/reference.pdf');
 const DEFAULT_DPI = 200;
 const DEFAULT_PAGES = 12;
+
 const execFileAsync = promisify(execFile);
-let debugMode = false;
 
 function pad2(value) {
   return String(value).padStart(2, '0');
@@ -73,14 +68,39 @@ async function normalizePdftoppmOutput(outDir, totalPages) {
   }
 }
 
-async function rasterizePdf(pdfPath, outDir, totalPages) {
+async function pdfInfo(pdfPath, debugMode) {
+  try {
+    const { stdout } = await execFileAsync('pdfinfo', [pdfPath]);
+    if (debugMode) {
+      const lines = stdout.split('\n').filter(Boolean);
+      const tail = lines.slice(-18).join('\n');
+      console.log(`pdfinfo (tail) for ${pdfPath}:\n${tail}`);
+    }
+  } catch (err) {
+    if (debugMode) {
+      console.warn(`pdfinfo failed for ${pdfPath}:`, err?.message || String(err));
+    }
+  }
+}
+
+async function rasterizePdf(pdfPath, outDir, totalPages, debugMode) {
   await ensureDir(outDir);
+
+  // Clean previous files to avoid stale comparisons
+  const existing = await fs.readdir(outDir).catch(() => []);
+  await Promise.all(
+    existing
+      .filter((f) => f.endsWith('.png'))
+      .map((f) => fs.rm(path.join(outDir, f), { force: true }))
+  );
+
   const prefix = path.join(outDir, 'page');
 
+  // pdftoppm writes page-1.png or page-01.png depending on version/options
   await execFileAsync('pdftoppm', [
+    '-png',
     '-r',
     String(DEFAULT_DPI),
-    '-png',
     '-f',
     '1',
     '-l',
@@ -90,117 +110,49 @@ async function rasterizePdf(pdfPath, outDir, totalPages) {
   ]);
 
   await normalizePdftoppmOutput(outDir, totalPages);
-}
 
-async function logPdfPageSize(pdfPath, pageNumber) {
-  try {
-    const { stdout } = await execFileAsync('pdfinfo', [
-      '-f',
-      String(pageNumber),
-      '-l',
-      String(pageNumber),
-      pdfPath,
-    ]);
-    const pageLine = stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .find((line) => line.startsWith('Page size'));
-
-    if (pageLine) {
-      console.log(`pdf page-${pageNumber} size: ${pageLine}`);
-    } else if (stdout.trim()) {
-      console.log(`pdf page-${pageNumber} info:\n${stdout.trim()}`);
-    }
-  } catch (err) {
-    console.warn(`pdfinfo failed for page-${pageNumber}:`, err.message);
+  // Basic guardrail: ensure first page exists
+  const first = path.join(outDir, 'page-01.png');
+  if (!(await fileExists(first))) {
+    throw new Error(`Rasterization failed: missing ${first}`);
   }
-}
-
-async function normalizeToLandscape(filePath, outPath) {
-  const buffer = await fs.readFile(filePath);
-  let png = PNG.sync.read(buffer);
-  let outBuffer = buffer;
-  let rotated = false;
-
-  if (png.width < png.height) {
-    outBuffer = await sharp(buffer).rotate(90).png().toBuffer();
-    png = PNG.sync.read(outBuffer);
-    rotated = true;
-  }
-
-  if (outPath) {
-    await fs.writeFile(outPath, outBuffer);
-  }
-
-  return { png, rotated };
-}
-
-async function comparePage(pageNumber) {
-  const refName = `page-${pad2(pageNumber)}.png`;
-  const refPath = path.join(refDir, refName);
-  const testPath = path.join(genDir, refName);
-  const diffPath = path.join(diffDir, `diff-${pad2(pageNumber)}.png`);
-  const genNormPath = path.join(genNormDir, refName);
-
-  const [refNormalized, genNormalized] = await Promise.all([
-    normalizeToLandscape(refPath),
-    normalizeToLandscape(testPath, genNormPath),
-  ]);
-  const refPng = refNormalized.png;
-  const testPng = genNormalized.png;
 
   if (debugMode) {
-    console.log(
-      `page-${pad2(pageNumber)}: ref=${refPng.width}x${refPng.height} (rotated=${refNormalized.rotated ? 'yes' : 'no'}) vs gen=${testPng.width}x${testPng.height} (rotated=${genNormalized.rotated ? 'yes' : 'no'})`
-    );
+    await pdfInfo(pdfPath, true);
+  }
+}
+
+function parseArgs(argv) {
+  // Accepted:
+  // node scripts/pixelmatch.mjs <generatedPdf> [totalPages] [referencePdf] [--debug]
+  const args = argv.slice(2);
+  let debugMode = false;
+
+  const positional = [];
+  for (const a of args) {
+    if (a === '--debug') debugMode = true;
+    else positional.push(a);
   }
 
-  if (refPng.width !== testPng.width || refPng.height !== testPng.height) {
-    throw new Error(
-      `Size mismatch for page-${pad2(pageNumber)}: ref ${refPng.width}x${refPng.height} vs gen ${testPng.width}x${testPng.height}`
-    );
-  }
+  const genPdfPath = positional[0];
+  const maybePages = positional[1];
+  const maybeRef = positional[2];
 
-  const diffPng = new PNG({ width: refPng.width, height: refPng.height });
-  const diffPixels = pixelmatch(
-    refPng.data,
-    testPng.data,
-    diffPng.data,
-    refPng.width,
-    refPng.height,
-    {
-      threshold: 0.1,
-      includeAA: true,
-    }
-  );
+  const totalPages =
+    maybePages && /^[0-9]+$/.test(maybePages) ? Number(maybePages) : DEFAULT_PAGES;
 
-  await writePng(diffPath, diffPng);
+  const refPdfPath = maybeRef || DEFAULT_REF_PDF;
 
-  const totalPixels = refPng.width * refPng.height;
-  const percent = (diffPixels / totalPixels) * 100;
-
-  return {
-    page: pageNumber,
-    diffPixels,
-    totalPixels,
-    percent,
-    diffPath,
-  };
+  return { genPdfPath, refPdfPath, totalPages, debugMode };
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  debugMode = args.includes('--debug');
-  if (debugMode) {
-    args.splice(args.indexOf('--debug'), 1);
-  }
+  const { genPdfPath, refPdfPath, totalPages, debugMode } = parseArgs(process.argv);
 
-  const genPdfArg = args[0];
-  const pageArg = args[1];
-  const totalPages = pageArg ? Number(pageArg) : DEFAULT_PAGES;
-
-  if (!genPdfArg) {
-    console.error('Usage: node scripts/pixelmatch.mjs <generatedPdfPath> [totalPages]');
+  if (!genPdfPath) {
+    console.error(
+      'Usage: node scripts/pixelmatch.mjs <generatedPdfPath> [totalPages] [referencePdfPath] [--debug]'
+    );
     process.exit(1);
   }
 
@@ -209,51 +161,79 @@ async function main() {
     process.exit(1);
   }
 
-  const genPdfPath = path.isAbsolute(genPdfArg) ? genPdfArg : path.join(rootDir, genPdfArg);
-
-  if (!(await fileExists(REF_PDF))) {
-    console.error(`Missing reference PDF: ${REF_PDF}`);
-    process.exit(1);
-  }
-
-  if (!(await fileExists(genPdfPath))) {
-    console.error(`Missing generated PDF: ${genPdfPath}`);
-    process.exit(1);
-  }
+  const absGen = path.resolve(process.cwd(), genPdfPath);
+  const absRef = path.resolve(process.cwd(), refPdfPath);
 
   if (debugMode) {
-    console.log(`Rasterizing reference PDF -> ${refDir}`);
+    console.log('Using:');
+    console.log('  reference:', absRef);
+    console.log('  generated :', absGen);
+    console.log('  pages     :', totalPages);
+    console.log('  dpi       :', DEFAULT_DPI);
+    console.log('  out       :', OUT_DIR);
   }
-  await rasterizePdf(REF_PDF, refDir, totalPages);
 
-  if (debugMode) {
-    console.log(`Rasterizing generated PDF -> ${genDir}`);
+  if (!(await fileExists(absRef))) {
+    throw new Error(`Reference PDF not found: ${absRef}`);
   }
-  await rasterizePdf(genPdfPath, genDir, totalPages);
+  if (!(await fileExists(absGen))) {
+    throw new Error(`Generated PDF not found: ${absGen}`);
+  }
 
-  await logPdfPageSize(genPdfPath, 12);
-
-  await ensureDir(genNormDir);
+  await ensureDir(OUT_DIR);
+  await ensureDir(refDir);
+  await ensureDir(genDir);
   await ensureDir(diffDir);
 
-  let totalDiff = 0;
+  console.log(`Rasterizing reference PDF -> ${refDir}`);
+  await rasterizePdf(absRef, refDir, totalPages, debugMode);
+
+  console.log(`Rasterizing generated PDF -> ${genDir}`);
+  await rasterizePdf(absGen, genDir, totalPages, debugMode);
+
+  let totalDiffPixels = 0;
   let totalPixels = 0;
 
   for (let page = 1; page <= totalPages; page += 1) {
-    const result = await comparePage(page);
-    totalDiff += result.diffPixels;
-    totalPixels += result.totalPixels;
+    const padded = pad2(page);
+    const refPngPath = path.join(refDir, `page-${padded}.png`);
+    const genPngPath = path.join(genDir, `page-${padded}.png`);
+    const outDiffPath = path.join(diffDir, `diff-${padded}.png`);
 
-    console.log(
-      `page-${pad2(result.page)}: diff=${result.diffPixels} (${result.percent.toFixed(2)}%) -> ${result.diffPath}`
+    const refPng = await readPng(refPngPath);
+    const genPng = await readPng(genPngPath);
+
+    if (refPng.width !== genPng.width || refPng.height !== genPng.height) {
+      throw new Error(
+        `Size mismatch on page-${padded}: ref=${refPng.width}x${refPng.height} vs gen=${genPng.width}x${genPng.height}`
+      );
+    }
+
+    const diffPng = new PNG({ width: refPng.width, height: refPng.height });
+
+    const diff = pixelmatch(
+      refPng.data,
+      genPng.data,
+      diffPng.data,
+      refPng.width,
+      refPng.height,
+      { threshold: 0.1 }
     );
+
+    totalDiffPixels += diff;
+    totalPixels += refPng.width * refPng.height;
+
+    const pct = (diff / (refPng.width * refPng.height)) * 100;
+    console.log(`page-${padded}: diff=${diff} (${pct.toFixed(2)}%) -> ${outDiffPath}`);
+
+    await writePng(outDiffPath, diffPng);
   }
 
-  const totalPercent = totalPixels > 0 ? (totalDiff / totalPixels) * 100 : 0;
-  console.log(`TOTAL: diff=${totalDiff} (${totalPercent.toFixed(2)}%)`);
+  const totalPct = (totalDiffPixels / totalPixels) * 100;
+  console.log(`TOTAL: diff=${totalDiffPixels} (${totalPct.toFixed(2)}%)`);
 }
 
-main().catch((error) => {
-  console.error('Pixelmatch failed:', error.message || error);
+main().catch((err) => {
+  console.error(err?.stack || err?.message || String(err));
   process.exit(1);
 });

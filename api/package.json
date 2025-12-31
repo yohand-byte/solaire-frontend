@@ -14,12 +14,19 @@
     "axios": "^1.13.2",
     "busboy": "^1.6.0",
     "cors": "^2.8.5",
-    "express": "^4.18.2",
+    "dotenv": "^17.2.3",
+    "express": "^4.22.1",
     "firebase-admin": "^11.11.0",
     "pdfkit": "^0.17.2",
     "proj4": "^2.20.2",
     "puppeteer": "^24.34.0",
     "puppeteer-core": "^24.34.0",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.21.0"
   }
 }

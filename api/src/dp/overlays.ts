@@ -83,11 +83,34 @@ export async function overlaySvgsOnImage(
   outPath: string
 ): Promise<string> {
   const base = sharp(basePath);
-  const inputs = overlays.map((overlay) => ({
-    input: Buffer.from(overlay.svg),
-    left: overlay.left ?? 0,
-    top: overlay.top ?? 0,
-  }));
+  const meta = await base.metadata();
+  const baseWidth = meta.width ?? 0;
+  const baseHeight = meta.height ?? 0;
+
+  if (!baseWidth || !baseHeight) {
+    throw new Error(`Invalid base image dimensions for ${basePath}: ${baseWidth}x${baseHeight}`);
+  }
+
+  const inputs = await Promise.all(
+    overlays.map(async (overlay) => {
+      const svgBuf = Buffer.from(overlay.svg);
+      const raster = await sharp(svgBuf, { density: 300 })
+        .resize({
+          width: baseWidth,
+          height: baseHeight,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .png()
+        .toBuffer();
+
+      return {
+        input: raster,
+        left: overlay.left ?? 0,
+        top: overlay.top ?? 0,
+      };
+    })
+  );
 
   await base.composite(inputs).toFile(outPath);
   return outPath;

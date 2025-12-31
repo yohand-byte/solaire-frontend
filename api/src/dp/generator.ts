@@ -34,10 +34,12 @@ import {
   PAGE_WIDTH_PT,
   ptToMm,
 } from './template';
+import { type DpMeta, withDefaultMeta } from './meta';
 
 export type DpOptions = {
   outputDir?: string;
   dpi?: number;
+  meta?: DpMeta;
 };
 
 export type DpAssets = {
@@ -73,7 +75,6 @@ const CONTENT_RIGHT = PAGE_WIDTH_PT - FRAME_MARGIN_PT - 20;
 const CONTENT_TOP = FRAME_MARGIN_PT + 70;
 const CONTENT_BOTTOM = PAGE_HEIGHT_PT - FRAME_MARGIN_PT - 40;
 const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
-const CONTENT_HEIGHT = CONTENT_BOTTOM - CONTENT_TOP;
 
 const DP1_GAP = 16;
 const DP1_MAP_HEIGHT = 240;
@@ -110,15 +111,15 @@ function drawImageBox(doc: PDFDocument, imagePath: string, x: number, y: number,
   doc.image(imagePath, x, y, { width, height });
 }
 
-function renderCoverPage(doc: PDFDocument, title: string, address: string): void {
+function renderCoverPage(doc: PDFDocument, meta: Required<DpMeta>, siteAddress: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DECLARATION PREALABLE');
 
   setBoldFont(doc, 18);
-  doc.text(title, 0, CONTENT_TOP + 10, { align: 'center', width: PAGE_WIDTH_PT });
+  doc.text(meta.projectTitle, 0, CONTENT_TOP + 10, { align: 'center', width: PAGE_WIDTH_PT });
 
   setBodyFont(doc, 11);
-  doc.text(address, 0, CONTENT_TOP + 45, { align: 'center', width: PAGE_WIDTH_PT });
+  doc.text(siteAddress, 0, CONTENT_TOP + 45, { align: 'center', width: PAGE_WIDTH_PT });
 
   doc
     .lineWidth(0.8)
@@ -127,8 +128,18 @@ function renderCoverPage(doc: PDFDocument, title: string, address: string): void
     .lineTo(CONTENT_RIGHT - 40, CONTENT_TOP + 90)
     .stroke();
 
+  // Bloc infos (simple, sans casser le layout)
+  setBoldFont(doc, 11);
+  doc.text(`Dossier realise par : ${meta.issuerName}`, CONTENT_LEFT, CONTENT_TOP + 100, { width: CONTENT_WIDTH });
+  setBodyFont(doc, 11);
+  if (meta.issuerTagline) {
+    doc.text(meta.issuerTagline, CONTENT_LEFT, CONTENT_TOP + 118, { width: CONTENT_WIDTH });
+  }
+  setBoldFont(doc, 11);
+  doc.text(`Maitre d'ouvrage : ${meta.ownerName}`, CONTENT_LEFT, CONTENT_TOP + 140, { width: CONTENT_WIDTH });
+
   setBoldFont(doc, 12);
-  doc.text('Sommaire', CONTENT_LEFT, CONTENT_TOP + 110, { width: CONTENT_WIDTH });
+  doc.text('Sommaire', CONTENT_LEFT, CONTENT_TOP + 170, { width: CONTENT_WIDTH });
 
   setBodyFont(doc, 10);
   const sommaire = [
@@ -146,16 +157,17 @@ function renderCoverPage(doc: PDFDocument, title: string, address: string): void
   ];
 
   sommaire.forEach((item, index) => {
-    doc.text(`${index + 1}. ${item}`, CONTENT_LEFT, CONTENT_TOP + 135 + index * 18, {
+    doc.text(`${index + 1}. ${item}`, CONTENT_LEFT, CONTENT_TOP + 195 + index * 18, {
       width: CONTENT_WIDTH,
     });
   });
 
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Dossier DP', right: 'COUVERTURE' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: 'Dossier DP', right: 'COUVERTURE' });
 }
 
 function renderDp1Page(
   doc: PDFDocument,
+  meta: Required<DpMeta>,
   title: string,
   scaleLabel: string,
   leftImage: string,
@@ -163,7 +175,7 @@ function renderDp1Page(
 ): void {
   drawFrame(doc);
   drawTopTitle(doc, title);
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: `Echelle ${scaleLabel}`, right: 'DP1' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: `Echelle ${scaleLabel}`, right: 'DP1' });
 
   const mapY = CONTENT_TOP + 30;
 
@@ -178,10 +190,10 @@ function renderDp1Page(
   }
 }
 
-function renderDp2Page(doc: PDFDocument, title: string, scaleLabel: string, imagePath: string): void {
+function renderDp2Page(doc: PDFDocument, meta: Required<DpMeta>, title: string, scaleLabel: string, imagePath: string): void {
   drawFrame(doc);
   drawTopTitle(doc, title);
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: `Echelle ${scaleLabel}`, right: 'DP2' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: `Echelle ${scaleLabel}`, right: 'DP2' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP2_MAP_HEIGHT);
@@ -192,6 +204,7 @@ function renderDp2Page(doc: PDFDocument, title: string, scaleLabel: string, imag
 
 function renderDp4Page(
   doc: PDFDocument,
+  meta: Required<DpMeta>,
   data: {
     address: string;
     parcelRef: string;
@@ -206,7 +219,7 @@ function renderDp4Page(
 ): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP4 - FICHE TECHNIQUE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Echelle 1/250', right: 'DP4' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: 'Echelle 1/250', right: 'DP4' });
 
   const tableX = CONTENT_LEFT;
   const tableY = CONTENT_TOP + 10;
@@ -241,53 +254,53 @@ function renderDp4Page(
   }
 }
 
-function renderDp5Page(doc: PDFDocument, imagePath: string): void {
+function renderDp5Page(doc: PDFDocument, meta: Required<DpMeta>, imagePath: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP5 - INSERTION GRAPHIQUE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Echelle 1/500', right: 'DP5' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: 'Echelle 1/500', right: 'DP5' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP5_MAP_HEIGHT);
 }
 
-function renderDp6Page(doc: PDFDocument, imagePath: string): void {
+function renderDp6Page(doc: PDFDocument, meta: Required<DpMeta>, imagePath: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP6 - INSERTION PHOTOGRAPHIQUE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Vue terrain', right: 'DP6' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: 'Vue terrain', right: 'DP6' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP6_MAP_HEIGHT);
 }
 
-function renderDp7Page(doc: PDFDocument, imagePath: string): void {
+function renderDp7Page(doc: PDFDocument, meta: Required<DpMeta>, imagePath: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP7 - PHOTOGRAPHIE PROCHE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Vue terrain', right: 'DP7' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: 'Vue terrain', right: 'DP7' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
 }
 
-function renderDp8Page(doc: PDFDocument, imagePath: string): void {
+function renderDp8Page(doc: PDFDocument, meta: Required<DpMeta>, imagePath: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP8 - PHOTOGRAPHIE LOINTAINE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Vue terrain', right: 'DP8' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: 'Vue terrain', right: 'DP8' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
 }
 
-function renderDp11Page(doc: PDFDocument, noticeText: string): void {
+function renderDp11Page(doc: PDFDocument, meta: Required<DpMeta>, noticeText: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP11 - NOTICE DESCRIPTIVE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Notice', right: 'DP11' });
+  drawFooterTriptych(doc, { left: meta.issuerName, center: 'Notice', right: 'DP11' });
 
   const textX = CONTENT_LEFT;
   const textY = CONTENT_TOP + 10;
   const textWidth = CONTENT_WIDTH;
 
   setBodyFont(doc, 10.5);
-  doc.text(noticeText, textX, textY, { width: textWidth, align: 'justify' });
+  doc.text(`Maitre d'ouvrage : ${meta.ownerName}\n\n${noticeText}`, textX, textY, { width: textWidth, align: 'justify' });
 }
 
 function buildNoticeText(data: { city: string; parcelRef: string; orientation: string }): string {
@@ -347,6 +360,8 @@ async function addPanelsOverlay(basePath: string, outPath: string): Promise<stri
 
 export async function generateDpPack(address: string, options: DpOptions = {}): Promise<string> {
   const dpi = options.dpi || DEFAULT_DPI;
+  const meta = withDefaultMeta(options.meta);
+
   const timestamp = Date.now().toString();
   const outputDir = options.outputDir || path.resolve(process.cwd(), 'dp-output', timestamp);
 
@@ -420,61 +435,73 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
     },
   };
 
-  const pdfPath = path.join(outputDir, 'dp-qualiwatt.pdf');
+  const pdfPath = path.join(outputDir, 'dp-dossier.pdf');
   const doc = new PDFDocument({ size: [PAGE_WIDTH_PT, PAGE_HEIGHT_PT], margin: 0 });
 
   registerFonts(doc);
-  doc.pipe(fs.createWriteStream(pdfPath));
+  const outStream = fs.createWriteStream(pdfPath);
+  doc.pipe(outStream);
 
-  renderCoverPage(doc, 'Installation photovoltaique', geocoded.label);
-
-  addLandscapePage(doc);
-  renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000);
+  renderCoverPage(doc, meta, geocoded.label);
 
   addLandscapePage(doc);
-  renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/2000', assets.dp1.plan2000);
+  renderDp1Page(doc, meta, 'DP1 - PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000);
 
   addLandscapePage(doc);
-  renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/5000', assets.dp1.plan5000);
+  renderDp1Page(doc, meta, 'DP1 - PLAN DE SITUATION', '1/2000', assets.dp1.plan2000);
 
   addLandscapePage(doc);
-  renderDp2Page(doc, 'DP2 - PLAN DE MASSE AVANT', '1/250', assets.dp2.avant);
+  renderDp1Page(doc, meta, 'DP1 - PLAN DE SITUATION', '1/5000', assets.dp1.plan5000);
 
   addLandscapePage(doc);
-  renderDp2Page(doc, 'DP2 - PLAN DE MASSE APRES', '1/250', assets.dp2.apres);
+  renderDp2Page(doc, meta, 'DP2 - PLAN DE MASSE AVANT', '1/250', assets.dp2.avant);
+
+  addLandscapePage(doc);
+  renderDp2Page(doc, meta, 'DP2 - PLAN DE MASSE APRES', '1/250', assets.dp2.apres);
 
   addLandscapePage(doc);
   renderDp4Page(
     doc,
+    meta,
     {
       address: geocoded.label,
-      parcelRef: 'XX 0000',
-      powerKw: '9 kWc',
-      surfaceM2: '40 m2',
-      panelType: 'Noirs mats',
-      roofType: 'Tuiles',
-      orientation: 'Sud',
-      slope: '30 degres',
+      parcelRef: meta.parcelRef,
+      powerKw: meta.powerKw,
+      surfaceM2: meta.surfaceM2,
+      panelType: meta.panelType,
+      roofType: meta.roofType,
+      orientation: meta.orientation,
+      slope: meta.slope,
     },
     assets.dp4.ortho
   );
 
   addLandscapePage(doc);
-  renderDp5Page(doc, assets.dp5.ortho);
+  renderDp5Page(doc, meta, assets.dp5.ortho);
 
   addLandscapePage(doc);
-  renderDp6Page(doc, assets.dp6.view);
+  renderDp6Page(doc, meta, assets.dp6.view);
 
   addLandscapePage(doc);
-  renderDp7Page(doc, assets.dp7.view);
+  renderDp7Page(doc, meta, assets.dp7.view);
 
   addLandscapePage(doc);
-  renderDp8Page(doc, assets.dp8.view);
+  renderDp8Page(doc, meta, assets.dp8.view);
 
-  addPortraitPage(doc);
-  renderDp11Page(doc, buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef: 'XX 0000', orientation: 'SUD' }));
+  addLandscapePage(doc);
+  renderDp11Page(doc, meta, buildNoticeText({
+    city: geocoded.city || 'VILLE',
+    parcelRef: meta.parcelRef,
+    orientation: meta.orientation.toUpperCase(),
+  }));
 
   doc.end();
+
+  await new Promise((resolve, reject) => {
+    outStream.on("finish", resolve);
+    outStream.on("close", resolve);
+    outStream.on("error", reject);
+  });
 
   return pdfPath;
 }
