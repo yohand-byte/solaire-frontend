@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur DP Mairie - Panneaux Solaires</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #1a365d;
+            --primary-light: #2c5282;
+            --secondary: #ed8936;
+            --secondary-light: #f6ad55;
+            --success: #38a169;
+            --danger: #e53e3e;
+            --bg-light: #f7fafc;
+            --bg-card: #ffffff;
+            --text-primary: #1a202c;
+            --text-secondary: #718096;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--bg-light) 0%, #edf2f7 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--secondary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .logo-text h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .logo-text span {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .header-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Progress Steps */
+        .progress-steps {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 2rem;
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            position: relative;
+        }
+
+        .step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: -20px;
+            width: 40px;
+            height: 2px;
+            background: var(--border);
+        }
+
+        .step.active:not(:last-child)::after {
+            background: var(--secondary);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .step.active .step-number {
+            background: var(--secondary);
+            color: white;
+        }
+
+        .step.completed .step-number {
+            background: var(--success);
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .step.active .step-label {
+            color: var(--text-primary);
+        }
+
+        /* Form Card */
+        .form-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        .form-section {
+            padding: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .form-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary);
+        }
+
+        .section-title i {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .section-title h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* Form Grid */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-group label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-group label .required {
+            color: var(--danger);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 0.875rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            background: var(--bg-light);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--secondary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(237, 137, 54, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .form-group .input-with-icon {
+            position: relative;
+        }
+
+        .form-group .input-with-icon input {
+            padding-left: 2.75rem;
+        }
+
+        .form-group .input-with-icon i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+
+        .form-group .hint {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* Address Autocomplete */
+        .address-wrapper {
+            position: relative;
+        }
+
+        .address-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: var(--shadow);
+        }
+
+        .address-suggestions.active {
+            display: block;
+        }
+
+        .address-suggestion {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s ease;
+        }
+
+        .address-suggestion:hover {
+            background: var(--bg-light);
+        }
+
+        .address-suggestion:last-child {
+            border-bottom: none;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+            border: 1px solid #90cdf4;
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .info-box i {
+            color: #3182ce;
+            margin-top: 2px;
+        }
+
+        .info-box p {
+            font-size: 0.9rem;
+            color: #2c5282;
+            line-height: 1.5;
+        }
+
+        /* Cadastre Info */
+        .cadastre-info {
+            background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+            border: 1px solid #9ae6b4;
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .cadastre-info.active {
+            display: block;
+        }
+
+        .cadastre-info h4 {
+            color: var(--success);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cadastre-info p {
+            font-size: 0.9rem;
+            color: #276749;
+        }
+
+        /* Generate Button */
+        .generate-section {
+            padding: 2rem;
+            background: linear-gradient(135deg, var(--bg-light) 0%, #edf2f7 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .generate-btn {
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-light) 100%);
+            color: white;
+            border: none;
+            padding: 1rem 3rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 14px 0 rgba(237, 137, 54, 0.39);
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px 0 rgba(237, 137, 54, 0.5);
+        }
+
+        .generate-btn:disabled {
+            background: var(--text-secondary);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .generate-btn .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .generate-btn.loading .spinner {
+            display: block;
+        }
+
+        .generate-btn.loading .btn-text {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .generate-hint {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .status-message.active {
+            display: flex;
+        }
+
+        .status-message.success {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            color: #276749;
+        }
+
+        .status-message.error {
+            background: #fff5f5;
+            border: 1px solid #feb2b2;
+            color: #c53030;
+        }
+
+        .status-message.info {
+            background: #ebf8ff;
+            border: 1px solid #90cdf4;
+            color: #2c5282;
+        }
+
+        /* Preview Panel */
+        .preview-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            margin-top: 2rem;
+            overflow: hidden;
+            display: none;
+        }
+
+        .preview-panel.active {
+            display: block;
+        }
+
+        .preview-header {
+            background: var(--primary);
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .preview-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .preview-content {
+            padding: 1.5rem;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .preview-item {
+            text-align: center;
+            padding: 1rem;
+            background: var(--bg-light);
+            border-radius: 10px;
+        }
+
+        .preview-item i {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .preview-item span {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .progress-steps {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .step:not(:last-child)::after {
+                display: none;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .form-section {
+                padding: 1.5rem;
+            }
+
+            .generate-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    
+/* --- DPGEN: force autocomplete dropdown visible --- */
+.address-wrapper{position:relative;}
+.address-suggestions{display:none; position:absolute; left:0; right:0; top:100%; margin-top:6px; z-index:99999; background:#fff; border:1px solid rgba(0,0,0,.12); border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,.12); max-height:280px; overflow:auto;}
+.address-suggestions.active{display:block;}
+.address-suggestion{padding:10px 12px; cursor:pointer;}
+.address-suggestion:hover{background:rgba(0,0,0,.04);}
+/* ----------------------------------------------- */
+
+.form-card, .form-section, .form-grid { overflow: visible !important; }
+
+/* DPGEN_UI_V1_BEGIN */
+:root{
+  --bg0:#f6f8fb;
+  --bg1:#eef3ff;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --line:rgba(15,23,42,.10);
+  --shadow:0 18px 50px rgba(2,6,23,.10);
+  --shadow2:0 10px 24px rgba(2,6,23,.10);
+  --radius:18px;
+  --radius2:14px;
+  --accent:#2563eb;
+  --accent2:#1d4ed8;
+  --good:#16a34a;
+  --bad:#dc2626;
+  --warn:#f59e0b;
+}
+
+body{
+  background:
+    radial-gradient(1100px 500px at 10% 0%, rgba(37,99,235,.12), transparent 55%),
+    radial-gradient(900px 420px at 90% 10%, rgba(29,78,216,.10), transparent 55%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
+  color:var(--text);
+}
+
+.container{
+  max-width:1120px;
+}
+
+.header{
+  background:linear-gradient(90deg, rgba(15,23,42,.92), rgba(30,41,59,.92));
+  border-bottom:1px solid rgba(255,255,255,.08);
+  box-shadow:0 10px 30px rgba(2,6,23,.18);
+}
+
+.header .logo{
+  transform:translateY(-1px);
+}
+
+.main-content{
+  padding-top:28px;
+}
+
+.progress-steps{
+  background:rgba(255,255,255,.72);
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:var(--radius);
+  box-shadow: var(--shadow2);
+}
+
+.step{
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.step.active{
+  transform: translateY(-2px);
+}
+
+.step-number{
+  width:34px !important;
+  height:34px !important;
+  border-radius:999px !important;
+  border:1px solid rgba(15,23,42,.10) !important;
+  background:rgba(255,255,255,.9) !important;
+  color:var(--muted) !important;
+  box-shadow:0 10px 22px rgba(2,6,23,.12);
+}
+
+.step.active .step-number{
+  background:linear-gradient(180deg, var(--accent), var(--accent2)) !important;
+  border-color:rgba(255,255,255,.35) !important;
+  color:#fff !important;
+}
+
+.step.completed .step-number{
+  background:linear-gradient(180deg, rgba(22,163,74,1), rgba(21,128,61,1)) !important;
+  color:#fff !important;
+}
+
+.step-line{
+  background:rgba(15,23,42,.10) !important;
+}
+.step.completed + .step-line{
+  background:rgba(22,163,74,.55) !important;
+}
+
+.form-card{
+  border-radius:var(--radius) !important;
+  background:rgba(255,255,255,.86) !important;
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(15,23,42,.08) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.form-section{
+  border-radius:var(--radius) !important;
+  border:1px solid rgba(15,23,42,.08) !important;
+  box-shadow: 0 10px 28px rgba(2,6,23,.06);
+}
+
+.section-title h2{
+  letter-spacing:-.02em;
+}
+
+label{
+  color:rgba(15,23,42,.92) !important;
+  font-weight:600 !important;
+}
+
+.hint{
+  color:var(--muted) !important;
+}
+
+input, select, textarea{
+  border-radius:14px !important;
+  border:1px solid rgba(15,23,42,.12) !important;
+  background:rgba(255,255,255,.92) !important;
+  box-shadow: 0 8px 18px rgba(2,6,23,.05);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+input:focus, select:focus, textarea:focus{
+  outline:none !important;
+  border-color: rgba(37,99,235,.55) !important;
+  box-shadow: 0 0 0 6px rgba(37,99,235,.14), 0 14px 30px rgba(2,6,23,.08) !important;
+  transform: translateY(-1px);
+}
+
+.input-with-icon i{
+  color:rgba(37,99,235,.75) !important;
+}
+
+.generate-btn{
+  border-radius:16px !important;
+  background:linear-gradient(180deg, var(--accent), var(--accent2)) !important;
+  box-shadow: 0 16px 34px rgba(37,99,235,.22);
+  border:1px solid rgba(255,255,255,.24) !important;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+}
+
+.generate-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 20px 44px rgba(37,99,235,.26);
+  filter: saturate(1.05);
+}
+
+.generate-btn:active{
+  transform: translateY(0px);
+  box-shadow: 0 12px 26px rgba(37,99,235,.20);
+}
+
+.status-message{
+  border-radius:16px !important;
+  border:1px solid rgba(15,23,42,.10) !important;
+  box-shadow: 0 12px 30px rgba(2,6,23,.08);
+}
+
+.status-message.success{
+  background: rgba(22,163,74,.10) !important;
+  border-color: rgba(22,163,74,.22) !important;
+}
+.status-message.error{
+  background: rgba(220,38,38,.10) !important;
+  border-color: rgba(220,38,38,.22) !important;
+}
+.status-message.info{
+  background: rgba(37,99,235,.10) !important;
+  border-color: rgba(37,99,235,.22) !important;
+}
+
+.info-box{
+  border-radius:16px !important;
+  border:1px solid rgba(37,99,235,.18) !important;
+  background: rgba(37,99,235,.06) !important;
+}
+
+.cadastre-info{
+  border-radius:16px !important;
+  border:1px solid rgba(22,163,74,.18) !important;
+  background: rgba(22,163,74,.06) !important;
+}
+
+.address-wrapper{ position:relative !important; }
+.address-suggestions{
+  border-radius:16px !important;
+  border:1px solid rgba(15,23,42,.12) !important;
+  box-shadow: 0 20px 60px rgba(2,6,23,.18) !important;
+  overflow:hidden !important;
+}
+
+.address-suggestion strong{
+  font-weight:650 !important;
+}
+
+.address-suggestion{
+  padding:12px 14px !important;
+  border-bottom:1px solid rgba(15,23,42,.06);
+}
+
+.address-suggestion:hover{
+  background: rgba(37,99,235,.08) !important;
+}
+
+.footer{
+  color: rgba(255,255,255,.80) !important;
+  background: linear-gradient(90deg, rgba(15,23,42,.92), rgba(30,41,59,.92)) !important;
+  border-top: 1px solid rgba(255,255,255,.08) !important;
+}
+/* DPGEN_UI_V1_END */
+</style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-solar-panel"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>DP Generator</h1>
+                    <span>Dossiers Déclaration Préalable</span>
+                </div>
+            </div>
+            <div class="header-badge">
+                <i class="fas fa-check-circle"></i> Format Qualiwatt
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Progress Steps -->
+        <div class="progress-steps">
+            <div class="step active" data-step="1">
+                <div class="step-number">1</div>
+                <span class="step-label">Adresse</span>
+            </div>
+            <div class="step" data-step="2">
+                <div class="step-number">2</div>
+                <span class="step-label">Informations</span>
+            </div>
+            <div class="step" data-step="3">
+                <div class="step-number">3</div>
+                <span class="step-label">Technique</span>
+            </div>
+            <div class="step" data-step="4">
+                <div class="step-number">4</div>
+                <span class="step-label">Génération</span>
+            </div>
+        </div>
+
+        <!-- Form Card -->
+        <form id="dpForm" class="form-card">
+            <!-- Section 1: Adresse du projet -->
+            <div class="form-section">
+                <div class="section-title">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <h2>Adresse du projet</h2>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>
+                            Adresse complète <span class="required">*</span>
+                        </label>
+                        <div class="address-wrapper">
+                            <div class="input-with-icon">
+                                <i class="fas fa-search"></i>
+                                <input 
+                                    type="text" 
+                                    id="adresseComplete" 
+                                    placeholder="Commencez à taper l'adresse..."
+                                    autocomplete="off"
+                                    required
+                                >
+                            </div>
+                            <div class="address-suggestions" id="suggestions"></div>
+                        </div>
+                        <span class="hint">L'autocomplétion utilise l'API Adresse du gouvernement</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Numéro et rue</label>
+                        <input type="text" id="adresse" placeholder="14 Rue Emile Nicol" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Code postal</label>
+                        <input type="text" id="codePostal" placeholder="14430" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ville</label>
+                        <input type="text" id="ville" placeholder="Dozulé" readonly>
+                    </div>
+                </div>
+
+                <div class="cadastre-info" id="cadastreInfo">
+                    <h4><i class="fas fa-check-circle"></i> Informations cadastrales détectées</h4>
+                    <p id="cadastreDetails">Parcelle: 0061 - Section: AC - Commune: Dozulé</p>
+                </div>
+
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    <p>Les coordonnées GPS et les informations cadastrales seront automatiquement récupérées pour générer les plans.</p>
+                </div>
+            </div>
+
+            <!-- Section 2: Informations générales -->
+            <div class="form-section">
+                <div class="section-title">
+                    <i class="fas fa-building"></i>
+                    <h2>Informations générales</h2>
+                </div>
+                
+                <div class="form-grid">
+
+<div class="form-group full-width">
+  <label>Logo de la société (drag & drop / upload)</label>
+  <div id="logoDropzone" style="border:1px dashed rgba(15,23,42,.25); border-radius:16px; padding:14px; background:rgba(255,255,255,.75); display:flex; align-items:center; gap:14px; cursor:pointer;">
+    <div id="logoPreviewWrap" style="width:64px; height:64px; border-radius:14px; border:1px solid rgba(15,23,42,.12); background:rgba(15,23,42,.03); display:flex; align-items:center; justify-content:center; overflow:hidden;">
+      <img id="logoPreview" src="" alt="" style="display:none; width:100%; height:100%; object-fit:contain;">
+      <span id="logoPlaceholder" style="color:rgba(15,23,42,.55); font-weight:600;">LOGO</span>
+    </div>
+    <div style="flex:1;">
+      <div style="font-weight:650; color:rgba(15,23,42,.92);">Dépose un fichier ici, ou clique pour choisir</div>
+      <div id="logoFileName" style="margin-top:4px; color:rgba(100,116,139,1); font-size:13px;">PNG/JPG/SVG (recommandé: PNG fond transparent)</div>
+    </div>
+  </div>
+  <input id="logoFile" type="file" accept="image/*" style="display:none;">
+</div>
+
+
+                    <div class="form-group">
+                        <label>
+                            Nom de la société <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="nomSociete" 
+                            placeholder="SOLAIRE FACILE"
+                            value="SOLAIRE FACILE"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            Maître d'ouvrage (client) <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="maitreOuvrage" 
+                            placeholder="Nom Prénom du client"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label>Référence parcelle</label>
+                        <input type="text" id="parcelle" placeholder="Auto-détecté">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Feuille cadastrale</label>
+                        <input type="text" id="feuille" placeholder="Auto-détecté">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Caractéristiques techniques -->
+            <div class="form-section">
+                <div class="section-title">
+                    <i class="fas fa-cogs"></i>
+                    <h2>Caractéristiques techniques</h2>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Puissance installée (kWc)</label>
+                        <input type="number" id="puissanceKwc" value="9" step="0.1" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Surface panneaux (m²)</label>
+                        <input type="number" id="surfacePanneaux" value="43" step="1" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nombre de panneaux</label>
+                        <input type="number" id="nombrePanneaux" value="24" step="1" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Orientation</label>
+                        <select id="orientationPanneaux">
+                            <option value="SUD" selected>SUD</option>
+                            <option value="SUD-EST">SUD-EST</option>
+                            <option value="SUD-OUEST">SUD-OUEST</option>
+                            <option value="EST">EST</option>
+                            <option value="OUEST">OUEST</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Type de couverture</label>
+                        <select id="typeCouverture">
+                            <option value="Tuiles" selected>Tuiles</option>
+                            <option value="Ardoises">Ardoises</option>
+                            <option value="Bac acier">Bac acier</option>
+                            <option value="Zinc">Zinc</option>
+                            <option value="Fibrociment">Fibrociment</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Surface terrain (m²)</label>
+                        <input type="number" id="surfaceTerrain" value="419" step="1" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Surface plancher (m²)</label>
+                        <input type="number" id="surfacePlancher" value="160" step="1" min="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate Section -->
+            <div class="generate-section">
+                <button type="submit" class="generate-btn" id="generateBtn">
+                    <span class="spinner"></span>
+                    <i class="fas fa-file-pdf btn-text"></i>
+                    <span class="btn-text">Générer la DP Mairie</span>
+                </button>
+                <p class="generate-hint">
+                    Le dossier comprend : DP1 à DP11 (12+ pages au format Qualiwatt)
+                </p>
+
+                <div class="status-message" id="statusMessage">
+                    <i class="fas fa-circle-notch"></i>
+                    <span id="statusText">En cours de génération...</span>
+                </div>
+            </div>
+        </form>
+
+        <!-- Preview Panel -->
+        <div class="preview-panel" id="previewPanel">
+            <div class="preview-header">
+                <h3><i class="fas fa-eye"></i> Aperçu du dossier</h3>
+                <span id="previewAddress"></span>
+            </div>
+            <div class="preview-content">
+                <div class="preview-grid">
+                    <div class="preview-item">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Page de garde</span>
+                    </div>
+                    <div class="preview-item">
+                        <i class="fas fa-map"></i>
+                        <span>DP1 Plans situation</span>
+                    </div>
+                    <div class="preview-item">
+                        <i class="fas fa-draw-polygon"></i>
+                        <span>DP2 Plans masse</span>
+                    </div>
+                    <div class="preview-item">
+                        <i class="fas fa-th"></i>
+                        <span>DP4 Calepinage</span>
+                    </div>
+                    <div class="preview-item">
+                        <i class="fas fa-cube"></i>
+                        <span>DP5 Visualisation 3D</span>
+                    </div>
+                    <div class="preview-item">
+                        <i class="fas fa-image"></i>
+                        <span>DP6-8 Photos</span>
+                    </div>
+                    <div class="preview-item">
+                        <i class="fas fa-file-signature"></i>
+                        <span>DP11 Notice</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>
+                Générateur DP Mairie v2.0 - 
+                APIs: IGN Géoportail, Google Street View, API Adresse gouv.fr
+            </p>
+        </footer>
+    </div>
+
+    
+
+
+
+
+
+
+<script>
+(() => {
+  const API_BASE = window.location.origin;
+  let selectedCoordinates = null;
+  let debounceTimer = null;
+
+  const form = document.getElementById('dpForm');
+  const adresseInput = document.getElementById('adresseComplete');
+  const suggestionsDiv = document.getElementById('suggestions');
+  const generateBtn = document.getElementById('generateBtn');
+  const statusMessage = document.getElementById('statusMessage');
+  const statusText = document.getElementById('statusText');
+  const cadastreInfo = document.getElementById('cadastreInfo');
+  const cadastreDetails = document.getElementById('cadastreDetails');
+  const previewPanel = document.getElementById('previewPanel');
+  const previewAddress = document.getElementById('previewAddress');
+
+  const val = (id) => (document.getElementById(id)?.value || "").trim();
+  
+
+  let dpgenLogoDataUrl = "";
+
+  const logoDropzone = document.getElementById("logoDropzone");
+  const logoFile = document.getElementById("logoFile");
+  const logoPreview = document.getElementById("logoPreview");
+  const logoPlaceholder = document.getElementById("logoPlaceholder");
+  const logoFileName = document.getElementById("logoFileName");
+
+  function setLogoFromFile(file){
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      dpgenLogoDataUrl = dataUrl;
+      if (logoPreview) {
+        logoPreview.src = dataUrl;
+        logoPreview.style.display = "block";
+      }
+      if (logoPlaceholder) logoPlaceholder.style.display = "none";
+      if (logoFileName) logoFileName.textContent = file.name;
+      try { localStorage.setItem("dpgen_logo_dataurl", dataUrl); localStorage.setItem("dpgen_logo_name", file.name); } catch(e){}
+    };
+    reader.readAsDataURL(file);
+  }
+
+  try {
+    const saved = localStorage.getItem("dpgen_logo_dataurl") || "";
+    const savedName = localStorage.getItem("dpgen_logo_name") || "";
+    if (saved) {
+      dpgenLogoDataUrl = saved;
+      if (logoPreview) { logoPreview.src = saved; logoPreview.style.display = "block"; }
+      if (logoPlaceholder) logoPlaceholder.style.display = "none";
+      if (logoFileName && savedName) logoFileName.textContent = savedName;
+    }
+  } catch(e){}
+
+  if (logoDropzone && logoFile) {
+    logoDropzone.addEventListener("click", () => logoFile.click());
+    logoDropzone.addEventListener("dragover", (e) => { e.preventDefault(); logoDropzone.style.boxShadow = "0 16px 40px rgba(2,6,23,.10)"; });
+    logoDropzone.addEventListener("dragleave", () => { logoDropzone.style.boxShadow = ""; });
+    logoDropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      logoDropzone.style.boxShadow = "";
+      const f = (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) ? e.dataTransfer.files[0] : null;
+      if (f) setLogoFromFile(f);
+    });
+    logoFile.addEventListener("change", () => {
+      const f = (logoFile.files && logoFile.files[0]) ? logoFile.files[0] : null;
+      if (f) setLogoFromFile(f);
+    });
+  }
+
+const num = (id) => {
+    const v = val(id);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  function updateProgress(step) {
+    document.querySelectorAll('.step').forEach((el, index) => {
+      el.classList.remove('active', 'completed');
+      if (index + 1 < step) el.classList.add('completed');
+      else if (index + 1 === step) el.classList.add('active');
+    });
+  }
+
+  function showStatus(type, message) {
+    if (!statusMessage || !statusText) return;
+    statusMessage.className = `status-message active ${type}`;
+    statusText.textContent = message;
+    const icon = statusMessage.querySelector('i');
+    if (icon) {
+      icon.className =
+        type === 'success' ? 'fas fa-check-circle' :
+        type === 'error' ? 'fas fa-exclamation-circle' :
+        'fas fa-spinner fa-spin';
+    }
+  }
+
+  function hideStatus() {
+    statusMessage?.classList.remove('active');
+  }
+
+  // Prevent outside click handler from closing before we click an item
+  if (suggestionsDiv) {
+    suggestionsDiv.addEventListener('mousedown', (e) => e.stopPropagation());
+    suggestionsDiv.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  function clearSuggestions() {
+    if (!suggestionsDiv) return;
+    suggestionsDiv.classList.remove('active');
+    suggestionsDiv.innerHTML = '';
+  }
+
+  async function selectAddressFromFeature(f) {
+    const coords = (f.geometry && f.geometry.coordinates) ? f.geometry.coordinates : null;
+    if (!coords || coords.length < 2) return;
+
+    selectedCoordinates = { lon: Number(coords[0]), lat: Number(coords[1]) };
+
+    document.getElementById('adresse').value = f.properties.name || '';
+    document.getElementById('codePostal').value = f.properties.postcode || '';
+    document.getElementById('ville').value = f.properties.city || '';
+    adresseInput.value = f.properties.label || `${f.properties.name || ''} ${f.properties.postcode || ''} ${f.properties.city || ''}`.trim();
+
+    clearSuggestions();
+    updateProgress(2);
+
+    try {
+      showStatus('info', 'Récupération des informations cadastrales...');
+      const r = await fetch(`${API_BASE}/api/cadastre?lat=${selectedCoordinates.lat}&lon=${selectedCoordinates.lon}`);
+      const data = await r.json();
+      if (data && data.success) {
+        document.getElementById('parcelle').value = data.parcelle || '';
+        document.getElementById('feuille').value = data.feuille || '';
+        if (cadastreDetails) {
+          cadastreDetails.textContent = `Parcelle: ${data.parcelle} - Section: ${data.section || 'N/A'} - Commune: ${data.commune || f.properties.city || ''}`;
+        }
+        cadastreInfo?.classList.add('active');
+      }
+      hideStatus();
+    } catch (e) {
+      console.error('Erreur cadastre:', e);
+      hideStatus();
+    }
+
+    if (previewAddress) previewAddress.textContent = adresseInput.value;
+    previewPanel?.classList.add('active');
+  }
+
+  if (adresseInput) {
+    adresseInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = adresseInput.value.trim();
+
+      if (q.length < 3) {
+        clearSuggestions();
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        try {
+          const r = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=8`);
+          const data = await r.json();
+          const features = (data && data.features) ? data.features : [];
+          if (!suggestionsDiv) return;
+
+          if (features.length === 0) {
+            clearSuggestions();
+            return;
+          }
+
+          suggestionsDiv.innerHTML = features.map((f, i) => `
+            <div class="address-suggestion" data-idx="${i}">
+              <strong>${f.properties.label}</strong>
+            </div>
+          `).join('');
+          suggestionsDiv.classList.add('active');
+
+          const nodes = suggestionsDiv.querySelectorAll('.address-suggestion');
+          nodes.forEach((el) => {
+            el.addEventListener('click', async () => {
+              const idx = Number(el.getAttribute('data-idx'));
+              const f = features[idx];
+              await selectAddressFromFeature(f);
+            });
+          });
+        } catch (e) {
+          console.error('Erreur autocomplétion:', e);
+        }
+      }, 250);
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.address-wrapper')) clearSuggestions();
+  });
+
+  function validateForm() {
+    if (!selectedCoordinates) {
+      showStatus('error', 'Sélectionne l’adresse dans la liste (autocomplete) avant de générer.');
+      return false;
+    }
+    const required = ['nomSociete', 'maitreOuvrage'];
+    for (const id of required) {
+      const input = document.getElementById(id);
+      if (!input || !input.value.trim()) {
+        showStatus('error', 'Veuillez remplir les champs obligatoires');
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function postAndDownload(payload) {
+    generateBtn?.classList.add('loading');
+    if (generateBtn) generateBtn.disabled = true;
+    showStatus('info', 'Génération du dossier…');
+
+    const r = await fetch('/api/generate-dp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!r.ok) {
+      const t = await r.text();
+      showStatus('error', 'Erreur: ' + t);
+      generateBtn?.classList.remove('loading');
+      if (generateBtn) generateBtn.disabled = false;
+      return;
+    }
+
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dp-mairie.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    showStatus('success', 'PDF généré et téléchargé.');
+    generateBtn?.classList.remove('loading');
+    if (generateBtn) generateBtn.disabled = false;
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!validateForm()) return;
+
+      updateProgress(4);
+
+      const payload = {
+        issuer: { name: val('nomSociete'), slogan: val('slogan') || '', logoDataUrl: dpgenLogoDataUrl || '' },
+        client: { name: val('maitreOuvrage') },
+        site: { address: val('adresse'), postalCode: val('codePostal'), city: val('ville') },
+        tech: {
+          panelCount: Math.max(1, Math.round(num('nombrePanneaux'))),
+          powerKwc: Math.max(0.1, num('puissanceKwc')),
+          surfacePanelsM2: Math.max(0.1, num('surfacePanneaux')),
+          orientation: val('orientationPanneaux') || 'SUD',
+          roofType: val('typeCouverture') || 'Tuiles',
+          terrainSurfaceM2: Math.max(0.1, num('surfaceTerrain')),
+          floorSurfaceM2: Math.max(0.1, num('surfacePlancher')),
+          parcelRef: (val('parcelle') || val('feuille') || 'NON RENSEIGNE').toString(),
+          slopeDeg: num('pente') || undefined,
+          azimuthDeg: num('azimut') || undefined,
+          panelType: 'Panneaux photovoltaïques noirs mats',
+        },
+      };
+
+      await postAndDownload(payload);
+    });
+  }
+})();
+</script>
+</body>
+</html>
