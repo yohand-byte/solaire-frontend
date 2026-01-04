@@ -3,6 +3,7 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
+import axios from 'axios';
 
 import { getParcelRef } from './cadastre';
 import { geocodeAddress, toLambert93 } from './geo';
@@ -60,6 +61,10 @@ export type DpOptions = {
     roofType?: string;
     orientation?: string;
     slope?: string;
+  };
+  cadastreViewer?: {
+    url?: string;
+    path?: string;
   };
 };
 
@@ -127,6 +132,50 @@ function drawImageBox(doc: PDFDocument, imagePath: string, x: number, y: number,
     .stroke();
 
   doc.image(imagePath, x, y, { width, height });
+}
+
+async function validateImage(candidate: string): Promise<string | null> {
+  try {
+    await sharp(candidate).metadata();
+    return candidate;
+  } catch (err) {
+    console.log('[CADASTRE] image validation failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function resolveCadastreViewerImage(
+  cadastre: DpOptions['cadastreViewer'],
+  outputDir: string
+): Promise<string | null> {
+  if (!cadastre) return null;
+
+  if (cadastre.path) {
+    try {
+      const stat = await fsPromises.stat(cadastre.path);
+      if (stat.isFile()) {
+        const valid = await validateImage(cadastre.path);
+        if (valid) return valid;
+      }
+    } catch (err) {
+      console.log('[CADASTRE] provided path not readable:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  if (cadastre.url) {
+    try {
+      await ensureDir(outputDir);
+      const target = path.join(outputDir, 'cadastre-viewer.png');
+      const response = await axios.get(cadastre.url, { responseType: 'arraybuffer', timeout: 20000 });
+      await fsPromises.writeFile(target, Buffer.from(response.data));
+      const valid = await validateImage(target);
+      if (valid) return valid;
+    } catch (err) {
+      console.log('[CADASTRE] download failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  return null;
 }
 
 function renderCoverPage(
@@ -239,6 +288,19 @@ function renderDp2Page(doc: PDFDocument, title: string, scaleLabel: string, imag
 
   drawLabelBox(doc, 'Parcelle', CONTENT_LEFT + 10, mapY + 12, 100);
   drawLabelBox(doc, 'Implantation', CONTENT_LEFT + 10, mapY + 38, 120);
+}
+
+function renderCadastrePage(doc: PDFDocument, imagePath: string): void {
+  drawFrame(doc);
+  drawTopTitle(doc, 'CADASTRE - VUE NETTOYEE');
+  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Cadastre', right: 'DP2' });
+
+  const mapY = CONTENT_TOP + 30;
+  try {
+    drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP2_MAP_HEIGHT);
+  } catch (err) {
+    console.log('[CADASTRE] render skipped:', err instanceof Error ? err.message : err);
+  }
 }
 
 function renderDp4Page(
@@ -509,6 +571,8 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
     },
   };
 
+  const cadastreViewerPath = await resolveCadastreViewerImage(options.cadastreViewer, outputDir);
+
   const pdfPath = path.join(outputDir, 'dp-qualiwatt.pdf');
   const doc = new PDFDocument({ autoFirstPage: false });
   const pdfStream = fs.createWriteStream(pdfPath);
@@ -552,6 +616,11 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
 
   addPage();
   renderDp2Page(doc, 'DP2 - PLAN DE MASSE APRES', '1/250', assets.dp2.apres);
+
+  if (cadastreViewerPath) {
+    addPage();
+    renderCadastrePage(doc, cadastreViewerPath);
+  }
 
   addPage();
   renderDp4Page(

@@ -152,6 +152,11 @@ async function generateDPDocument(project, analysis, payload = {}) {
     throw new Error('Adresse manquante');
   }
 
+  const cadastreViewer =
+    payload.cadastre_png_url || payload.cadastre_png_path
+      ? { url: payload.cadastre_png_url, path: payload.cadastre_png_path }
+      : undefined;
+
   const options = {
     cover: {
       title: payload.coverTitle,
@@ -173,6 +178,7 @@ async function generateDPDocument(project, analysis, payload = {}) {
       orientation: payload.orientationPanneaux,
       slope: payload.penteToiture,
     },
+    cadastreViewer,
   };
 
   const pdfPath = await generator.generateDpPack(address, options);
