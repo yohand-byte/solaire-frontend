@@ -351,8 +351,8 @@ export async function generateDp7Dp8(
   lat: number,
   lon: number,
   outDir: string,
-  width = 1600,
-  height = 1200
+  width = 2400,
+  height = 1600
 ): Promise<Dp7Dp8Images> {
   const dp7 = path.join(outDir, 'dp7-streetview-proche.jpg');
   const dp8 = path.join(outDir, 'dp8-streetview-loin.jpg');
@@ -445,8 +445,8 @@ export async function generateDp6(
   lat: number,
   lon: number,
   outDir: string,
-  width = 1600,
-  height = 1200
+  width = 2400,
+  height = 1600
 ): Promise<string> {
   const basePath = path.join(outDir, 'dp6-streetview.jpg');
   const outPath = path.join(outDir, 'dp6-streetview-panels.png');

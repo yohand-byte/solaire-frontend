@@ -38,9 +38,30 @@ import {
   ptToMm,
 } from './template';
 
+type ImageKind =
+  | 'dp1-plan-1000'
+  | 'dp1-ortho-1000'
+  | 'dp1-plan-2000'
+  | 'dp1-plan-5000'
+  | 'dp2-avant'
+  | 'dp2-apres'
+  | 'dp2-cadastre-viewer'
+  | 'dp4-ortho'
+  | 'dp5-ortho'
+  | 'dp6-view'
+  | 'dp7-view'
+  | 'dp8-view';
+
+type SourceOverride = {
+  path?: string;
+  url?: string;
+};
+
 export type DpOptions = {
   outputDir?: string;
   dpi?: number;
+  htmlCartoBaseUrl?: string;
+  sources?: Partial<Record<ImageKind, SourceOverride>>;
   overlays?: {
     dp1?: Dp1ManualOverlayOptions;
   };
@@ -118,7 +139,7 @@ const DP7_MAP_HEIGHT = 420;
 const DP4_ROOF_WIDTH = 180;
 const DP4_ROOF_HEIGHT = 180;
 
-const DEFAULT_DPI = 300;
+const DEFAULT_DPI = 360;
 
 function ensureDir(dirPath: string): Promise<void> {
   return fsPromises.mkdir(dirPath, { recursive: true });
@@ -142,6 +163,85 @@ async function validateImage(candidate: string): Promise<string | null> {
     console.log('[CADASTRE] image validation failed:', err instanceof Error ? err.message : err);
     return null;
   }
+}
+
+async function ensureMinResolution(
+  candidate: string,
+  minWidth?: number,
+  minHeight?: number
+): Promise<boolean> {
+  if (!minWidth && !minHeight) return true;
+  try {
+    const meta = await sharp(candidate).metadata();
+    if (minWidth && (meta.width || 0) < minWidth) return false;
+    if (minHeight && (meta.height || 0) < minHeight) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function downloadImageToPath(url: string, targetPath: string): Promise<string | null> {
+  try {
+    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+    await ensureDir(path.dirname(targetPath));
+    await fsPromises.writeFile(targetPath, Buffer.from(response.data));
+    const valid = await validateImage(targetPath);
+    if (valid) return valid;
+  } catch (err) {
+    console.log('[RENDER] download failed:', err instanceof Error ? err.message : err);
+  }
+  return null;
+}
+
+async function renderSourceImage(params: {
+  kind: ImageKind;
+  outDir: string;
+  fallbackPath: string;
+  build: () => Promise<string>;
+  override?: SourceOverride;
+  htmlCartoBaseUrl?: string;
+  minWidth?: number;
+  minHeight?: number;
+}): Promise<string> {
+  const { kind, outDir, fallbackPath, build, override, htmlCartoBaseUrl, minWidth, minHeight } = params;
+  const candidates: string[] = [];
+
+  if (override?.path) {
+    candidates.push(override.path);
+  }
+
+  const baseUrl = htmlCartoBaseUrl?.replace(/\/$/, '');
+  const htmlCartoUrl = override?.url || (baseUrl ? `${baseUrl}/${kind}.png` : undefined);
+
+  if (htmlCartoUrl) {
+    const targetExt = (() => {
+      try {
+        const parsed = new URL(htmlCartoUrl);
+        const ext = path.extname(parsed.pathname);
+        return ext || '.png';
+      } catch {
+        return '.png';
+      }
+    })();
+    const targetPath = path.join(outDir, `${kind}${targetExt}`);
+    const downloaded = await downloadImageToPath(htmlCartoUrl, targetPath);
+    if (downloaded) {
+      candidates.push(downloaded);
+    }
+  }
+
+  const built = await build();
+  candidates.push(built || fallbackPath);
+
+  for (const candidate of candidates) {
+    const validated = await validateImage(candidate);
+    if (validated && (await ensureMinResolution(validated, minWidth, minHeight))) {
+      return validated;
+    }
+  }
+
+  return fallbackPath;
 }
 
 async function resolveCadastreViewerImage(
@@ -514,6 +614,25 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
 
   await ensureDir(outputDir);
 
+  const sources = options.sources || {};
+  const htmlCartoBaseUrl = options.htmlCartoBaseUrl || process.env.HTML_CARTO_BASE_URL;
+  const resolveSourceImage = (
+    kind: ImageKind,
+    fallbackPath: string,
+    minWidth?: number,
+    minHeight?: number
+  ): Promise<string> =>
+    renderSourceImage({
+      kind,
+      outDir: outputDir,
+      fallbackPath,
+      build: async () => fallbackPath,
+      override: sources[kind],
+      htmlCartoBaseUrl,
+      minWidth,
+      minHeight,
+    });
+
   const geocoded = await geocodeAddress(address);
   const center = toLambert93({ lat: geocoded.lat, lon: geocoded.lon });
   const parcelInfo = await getParcelRef(geocoded.lat, geocoded.lon, geocoded.citycode);
@@ -556,35 +675,61 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   const dp6Image = await generateDp6(geocoded.lat, geocoded.lon, outputDir);
   const dp7dp8 = await generateDp7Dp8(geocoded.lat, geocoded.lon, outputDir);
 
+  const dp1Plan1000 = await resolveSourceImage('dp1-plan-1000', dp1Overlays.plan1000, 2000, 1400);
+  const dp1Ortho1000 = await resolveSourceImage('dp1-ortho-1000', dp1Overlays.ortho1000, 2000, 1400);
+  const dp1Plan2000 = await resolveSourceImage('dp1-plan-2000', dp1Plan2000Overlay, 2000, 1400);
+  const dp1Plan5000 = await resolveSourceImage('dp1-plan-5000', dp1Plan5000Overlay, 2000, 1400);
+
+  const dp2AvantPath = await resolveSourceImage('dp2-avant', dp2Base.avant, 2000, 1400);
+  const dp2ApresPath = await resolveSourceImage('dp2-apres', dp2Apres, 2000, 1400);
+
+  const dp4OrthoPath = await resolveSourceImage('dp4-ortho', dp4Ortho, 1800, 1200);
+  const dp5ImagePath = await resolveSourceImage('dp5-ortho', dp5Image, 2200, 1400);
+  const dp6ImagePath = await resolveSourceImage('dp6-view', dp6Image, 2200, 1400);
+  const dp7ImagePath = await resolveSourceImage('dp7-view', dp7dp8.dp7, 2000, 1400);
+  const dp8ImagePath = await resolveSourceImage('dp8-view', dp7dp8.dp8, 2000, 1400);
+
   const assets: DpAssets = {
     dp1: {
-      plan1000: dp1Overlays.plan1000,
-      ortho1000: dp1Overlays.ortho1000,
-      plan2000: dp1Plan2000Overlay,
-      plan5000: dp1Plan5000Overlay,
+      plan1000: dp1Plan1000,
+      ortho1000: dp1Ortho1000,
+      plan2000: dp1Plan2000,
+      plan5000: dp1Plan5000,
     },
     dp2: {
-      avant: dp2Base.avant,
-      apres: dp2Apres,
+      avant: dp2AvantPath,
+      apres: dp2ApresPath,
     },
     dp4: {
-      ortho: dp4Ortho,
+      ortho: dp4OrthoPath,
     },
     dp5: {
-      ortho: dp5Image,
+      ortho: dp5ImagePath,
     },
     dp6: {
-      view: dp6Image,
+      view: dp6ImagePath,
     },
     dp7: {
-      view: dp7dp8.dp7,
+      view: dp7ImagePath,
     },
     dp8: {
-      view: dp7dp8.dp8,
+      view: dp8ImagePath,
     },
   };
 
-  const cadastreViewerPath = await resolveCadastreViewerImage(options.cadastreViewer, outputDir);
+  const cadastreViewerRaw = await resolveCadastreViewerImage(options.cadastreViewer, outputDir);
+  const cadastreViewerPath = cadastreViewerRaw
+    ? await renderSourceImage({
+        kind: 'dp2-cadastre-viewer',
+        outDir: outputDir,
+        fallbackPath: cadastreViewerRaw,
+        build: async () => cadastreViewerRaw,
+        override: sources['dp2-cadastre-viewer'],
+        htmlCartoBaseUrl,
+        minWidth: 2000,
+        minHeight: 1400,
+      })
+    : null;
 
   const pdfPath = path.join(outputDir, 'dp-v2.pdf');
   const doc = new PDFDocument({ autoFirstPage: false });
