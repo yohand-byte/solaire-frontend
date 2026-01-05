@@ -924,18 +924,26 @@
 
                     <div class="form-group">
                         <label>Orientation</label>
-                        <input type="text" id="orientationPanneaux" value="SUD" readonly>
+                        <select id="orientationPanneaux">
+                            <option value="SUD" selected>SUD</option>
+                            <option value="SUD-SUD">SUD-SUD</option>
+                            <option value="SUD-EST">SUD-EST</option>
+                            <option value="SUD-OUEST">SUD-OUEST</option>
+                            <option value="EST">EST</option>
+                            <option value="OUEST">OUEST</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
                         <label>Type de couverture</label>
                         <select id="typeCouverture">
-                            <option value="Tuiles" selected>Tuiles</option>
+                            <option value="Tuiles mécaniques" selected>Tuiles mécaniques</option>
+                            <option value="Tuiles plates">Tuiles plates</option>
                             <option value="Ardoises">Ardoises</option>
                             <option value="Bac acier">Bac acier</option>
-                            <option value="Zinc">Zinc</option>
-                            <option value="Fibrociment">Fibrociment</option>
+                            <option value="Autre">Autre</option>
                         </select>
+                        <input type="text" id="typeCouvertureAutre" placeholder="Préciser" style="margin-top:8px; display:none;">
                     </div>
 
                     <div class="form-group">
@@ -1382,6 +1390,19 @@
             refreshPreviewState();
         }
 
+        function toggleTypeCouverture() {
+            const select = document.getElementById('typeCouverture');
+            const autre = document.getElementById('typeCouvertureAutre');
+            if (select.value === 'Autre') {
+                autre.style.display = 'block';
+                autre.required = true;
+            } else {
+                autre.style.display = 'none';
+                autre.required = false;
+                autre.value = '';
+            }
+        }
+
         // Form submission
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1408,13 +1429,20 @@
                     surfacePanneaux: parseFloat(document.getElementById('surfacePanneaux').value) || 43,
                     nombrePanneaux: parseInt(document.getElementById('nombrePanneaux').value) || 24,
                     orientationPanneaux: document.getElementById('orientationPanneaux').value,
-                    typeCouverture: document.getElementById('typeCouverture').value,
+                    typeCouverture: (() => {
+                        const sel = document.getElementById('typeCouverture');
+                        if (sel.value === 'Autre') {
+                            const val = document.getElementById('typeCouvertureAutre').value.trim();
+                            return val ? `Autre: ${val}` : 'Autre';
+                        }
+                        return sel.value;
+                    })(),
                     surfaceTerrain: parseFloat(document.getElementById('surfaceTerrain').value) || 419,
                     surfacePlancher: parseFloat(document.getElementById('surfacePlancher').value) || 160,
                     ...logoPayload
                 };
 
-                const response = await fetch(`${API_BASE}/api/generate-dp`, {
+                const response = await fetch(`${API_BASE}/api/generate-dp?format=json`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1422,27 +1450,29 @@
                     body: JSON.stringify(formData)
                 });
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Erreur lors de la génération');
+                const result = await response.json();
+                if (!response.ok || !result || !result.pdfPath) {
+                    throw new Error(result?.error || 'Erreur lors de la génération');
                 }
 
-                // Download PDF
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
+                // Download PDF via download endpoint
+                const downloadUrl = `${API_BASE}/api/dp-download?file=${encodeURIComponent(result.pdfPath)}`;
                 const a = document.createElement('a');
-                a.href = url;
+                a.href = downloadUrl;
                 a.download = `DP-${formData.maitreOuvrage.replace(/\s+/g, '-')}-${Date.now()}.pdf`;
                 document.body.appendChild(a);
                 a.click();
-                window.URL.revokeObjectURL(url);
                 a.remove();
+
+                // Store preview context
+                window.__DP_PREVIEW__ = {
+                    pdfPath: result.pdfPath,
+                    pageIndexMap: result.pageIndexMap || {}
+                };
 
                 showStatus('success', 'Dossier DP généré avec succès ! Téléchargement en cours...');
                 updateProgress(5);
-                setTimeout(() => {
-                    hideStatus();
-                }, 3000);
+                refreshPreviewState();
 
             } catch (error) {
                 console.error('Erreur:', error);
