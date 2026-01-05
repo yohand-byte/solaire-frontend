@@ -388,7 +388,7 @@ function renderDp6Page(doc: PDFDocument, imagePath: string, footerLabel: string)
 function renderDp7Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP7 : TERRAIN VU DE PRÈS');
-  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain de près', right: 'DP7' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain vu de près', right: 'DP7' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
@@ -397,7 +397,7 @@ function renderDp7Page(doc: PDFDocument, imagePath: string, footerLabel: string)
 function renderDp8Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP8 : TERRAIN VU DE LOIN');
-  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain de loin', right: 'DP8' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain vu de loin', right: 'DP8' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
