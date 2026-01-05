@@ -910,7 +910,16 @@
 
                     <div class="form-group">
                         <label>Puissance panneau (W)</label>
-                        <input type="number" id="puissancePanneauW" value="" readonly>
+                        <select id="puissancePanneauW">
+                            <option value="375">375</option>
+                            <option value="410">410</option>
+                            <option value="425">425</option>
+                            <option value="500" selected>500</option>
+                            <option value="550">550</option>
+                            <option value="600">600</option>
+                            <option value="custom">Autre...</option>
+                        </select>
+                        <input type="number" id="puissancePanneauWCustom" placeholder="Puissance personnalisée" step="1" min="1" style="margin-top: 8px; display: none;">
                     </div>
 
                     <div class="form-group">
@@ -1077,21 +1086,44 @@
             previewLightboxImage.src = PREVIEW_PLACEHOLDER;
         };
 
+        function effectivePanelPower() {
+            const select = document.getElementById('puissancePanneauW');
+            const custom = document.getElementById('puissancePanneauWCustom');
+            if (select.value === 'custom') {
+                const val = parseFloat(custom.value);
+                return Number.isFinite(val) && val > 0 ? val : null;
+            }
+            const val = parseFloat(select.value);
+            return Number.isFinite(val) && val > 0 ? val : null;
+        }
+
         function updatePanelPower() {
             const kwc = parseFloat(document.getElementById('puissanceKwc').value);
-            const nb = parseInt(document.getElementById('nombrePanneaux').value, 10);
-            const output = document.getElementById('puissancePanneauW');
-            if (kwc > 0 && nb > 0) {
-                output.value = Math.round((kwc * 1000) / nb);
+            const nbInput = document.getElementById('nombrePanneaux');
+            const panelPower = effectivePanelPower();
+            if (kwc > 0 && panelPower) {
+                const calcNb = Math.max(1, Math.round((kwc * 1000) / panelPower));
+                nbInput.value = calcNb;
+            }
+        }
+
+        function toggleCustomPanelPower() {
+            const select = document.getElementById('puissancePanneauW');
+            const custom = document.getElementById('puissancePanneauWCustom');
+            if (select.value === 'custom') {
+                custom.style.display = 'block';
             } else {
-                output.value = '';
+                custom.style.display = 'none';
+                custom.value = '';
             }
         }
 
         function previewsEnabled() {
             const nom = document.getElementById('nomSociete').value.trim();
             const maitre = document.getElementById('maitreOuvrage').value.trim();
-            return Boolean(selectedCoordinates && nom && maitre);
+            const kwc = parseFloat(document.getElementById('puissanceKwc').value);
+            const nb = parseInt(document.getElementById('nombrePanneaux').value, 10);
+            return Boolean(selectedCoordinates && nom && maitre && kwc > 0 && nb > 0);
         }
 
         function refreshPreviewState() {
@@ -1343,6 +1375,7 @@
         });
 
         function refreshDerivedUi() {
+            toggleCustomPanelPower();
             updatePanelPower();
             refreshPreviewState();
         }
@@ -1429,6 +1462,14 @@
                 }
                 refreshDerivedUi();
             });
+        });
+
+        document.getElementById('puissancePanneauW').addEventListener('change', () => {
+            toggleCustomPanelPower();
+            refreshDerivedUi();
+        });
+        document.getElementById('puissancePanneauWCustom').addEventListener('input', () => {
+            refreshDerivedUi();
         });
 
         // Init derived values
