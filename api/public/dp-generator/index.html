@@ -595,6 +595,12 @@
             box-shadow: var(--shadow);
         }
 
+        .preview-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
         .preview-item i {
             font-size: 2rem;
             color: var(--primary);
@@ -904,6 +910,11 @@
                     </div>
 
                     <div class="form-group">
+                        <label>Puissance panneau (W)</label>
+                        <input type="number" id="puissancePanneauW" value="" readonly>
+                    </div>
+
+                    <div class="form-group">
                         <label>Orientation</label>
                         <select id="orientationPanneaux">
                             <option value="SUD" selected>SUD</option>
@@ -1050,7 +1061,7 @@
         const previewLightboxClose = document.getElementById('previewLightboxClose');
 
         const LOGO_PLACEHOLDER =
-            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjcwIiB2aWV3Qm94PSIwIDAgMTIwIDcwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNzAiIHJ4PSIxMiIgZmlsbD0iI0VGRUYxRSIgc3Ryb2tlPSIjRDhEQURBIi8+CiAgPHBhdGggZD0iTTM2IDIzQzM2IDE3LjQ3NzEgNDAuNDc3MSAxMyA0NiAxM0g3NEM3OS41MjI5IDEzIDg0IDE3LjQ3NzEgODQgMjNDODQgMjguNTIyOSA3OS41MjI5IDMzIDc0IDMzSDQ2QzQwLjQ3NzEgMzMgMzYgMjguNTIyOSAzNiAyM1oiIGZpbGw9IiNBQkJGRkYiIHN0cm9rZT0iIzhEQkRGRiIvPgogIDxyZWN0IHg9IjI4IiB5PSIzNyIgd2lkdGg9IjY0IiBoZWlnaHQ9IjI4IiByeD0iNiIgZmlsbD0iI0ZGRiIgc3Ryb2tlPSIjRDhEQURBIi8+CiAgPHBhdGggZD0iTTYxLjUgNDdDNTcuMzM4MiA0NyA1NCA1MC4zMzgyIDU0IDU0LjVDNTQgNTguNjYxOCA1Ny4zMzgyIDYyIDYxLjUgNjJDNjUuNjYxOCA2MiA2OSA1OC42NjE4IDY5IDU0LjVDNjkgNTAuMzM4MiA2NS42NjE4IDQ3IDYxLjUgNDdaIiBzdHJva2U9IiM4RERBREYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0iI0VGRUYxRSIvPgo8L3N2Zz4=';
+            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect x=\"1.5\" y=\"1.5\" rx=\"12\" width=\"197\" height=\"97\" fill=\"%23F8FAFC\" stroke=\"%23CBD5E1\" stroke-width=\"3\"/><g fill=\"%2394A3B8\" stroke=\"%2394A3B8\" stroke-width=\"2\"><rect x=\"62\" y=\"30\" width=\"76\" height=\"40\" rx=\"8\" fill=\"none\"/><circle cx=\"100\" cy=\"50\" r=\"10\" fill=\"none\"/><path d=\"M78 30l6-8h32l6 8\" fill=\"none\"/></g><text x=\"100\" y=\"82\" text-anchor=\"middle\" font-family=\"Arial, sans-serif\" font-size=\"13\" fill=\"%236B7280\">Logo installateur</text></svg>';
         const PREVIEW_PLACEHOLDER =
             'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjQyMCIgdmlld0JveD0iMCAwIDYwMCA0MjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMTUiIHk9IjE1IiB3aWR0aD0iNTcwIiBoZWlnaHQ9IjM5MCIgcng9IjIwIiBmaWxsPSIjRkZGIiBzdHJva2U9IiNFNUU5RUIiIHN0cm9rZS13aWR0aD0iMyIvPjxwYXRoIGQ9Ik0xMDEgMzA1SDE1N0wyMTEgMjUxTDI1MyAyOTNMMzI5IDIxNkw0MDMgMjkwTDUwMCAxOTNINzAiIHN0cm9rZT0iI0I5QkNEOSIgc3Ryb2tlLXdpZHRoPSI0IiBmaWxsPSIjRTdFQ0ZFIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PGNpcmNsZSBjeD0iNDAwIiBjeT0iMTQwIiByPSI2MCIgc3Ryb2tlPSIjQjFCNkM4IiBzdHJva2Utd2lkdGg9IjQiIGZpbGw9IiNGRkYiLz48cGF0aCBkPSJNMzY1IDEzOUwzOTAgMTY1TDIzMCAzMjUiIHN0cm9rZT0iI0I5QkNEOSIgc3Ryb2tlLXdpZHRoPSI0IiBmaWxsPSIjRTdFQ0ZFIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48dGV4dCB4PSIyMCIgeT0iNDAwIiBmaWxsPSIjNzA3MDcwIiBmb250LXNpemU9IjI0IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiPkFwZXJjdcOpIHByw6l2aXN1ZWwgLSB2aXN1ZWxsZSBnaW7DqXJpcXVlIHByb3Zpc2lvbm5lbGUuPC90ZXh0Pjwvc3ZnPg==';
 
@@ -1066,6 +1077,31 @@
         previewLightboxImage.onerror = () => {
             previewLightboxImage.src = PREVIEW_PLACEHOLDER;
         };
+
+        function updatePanelPower() {
+            const kwc = parseFloat(document.getElementById('puissanceKwc').value);
+            const nb = parseInt(document.getElementById('nombrePanneaux').value, 10);
+            const output = document.getElementById('puissancePanneauW');
+            if (kwc > 0 && nb > 0) {
+                output.value = Math.round((kwc * 1000) / nb);
+            } else {
+                output.value = '';
+            }
+        }
+
+        function previewsEnabled() {
+            const nom = document.getElementById('nomSociete').value.trim();
+            const maitre = document.getElementById('maitreOuvrage').value.trim();
+            return Boolean(selectedCoordinates && nom && maitre);
+        }
+
+        function refreshPreviewState() {
+            const enabled = previewsEnabled();
+            previewItems.forEach(item => {
+                item.classList.toggle('disabled', !enabled);
+                item.setAttribute('aria-disabled', String(!enabled));
+            });
+        }
 
         // Update progress steps
         function updateProgress(step) {
@@ -1164,6 +1200,7 @@
             // Show preview
             previewAddress.textContent = element.querySelector('strong').textContent;
             previewPanel.classList.add('active');
+            refreshPreviewState();
         }
 
         // Hide suggestions when clicking outside
@@ -1286,6 +1323,7 @@
         };
 
         function openPreview(pageKey) {
+            if (!previewsEnabled()) return;
             previewLightboxImage.src = PREVIEW_PLACEHOLDER;
             previewLightboxCaption.textContent = previewCaptions[pageKey] || 'Aperçu indicatif';
             previewLightbox.hidden = false;
@@ -1304,6 +1342,11 @@
                 closePreview();
             }
         });
+
+        function refreshDerivedUi() {
+            updatePanelPower();
+            refreshPreviewState();
+        }
 
         // Form submission
         form.addEventListener('submit', async (e) => {
@@ -1385,8 +1428,12 @@
                 if (filled) {
                     updateProgress(3);
                 }
+                refreshDerivedUi();
             });
         });
+
+        // Init derived values
+        refreshDerivedUi();
     </script>
 </body>
 </html>
