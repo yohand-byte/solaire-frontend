@@ -178,6 +178,7 @@ async function resolveCadastreViewerImage(
   return null;
 }
 
+// Cover page renderer: logo + address + V2 sommaire (DP de reference alignment).
 function renderCoverPage(
   doc: PDFDocument,
   title: string,
@@ -254,6 +255,7 @@ function renderCoverPage(
   drawFooterTriptych(doc, { left: footerLabel, center: 'Dossier DP', right: 'COUVERTURE' });
 }
 
+// DP1 renderer (3 scales) with shared footer label (installer).
 function renderDp1Page(
   doc: PDFDocument,
   title: string,
@@ -279,6 +281,7 @@ function renderDp1Page(
   }
 }
 
+// DP2 renderer for avant/apres plans.
 function renderDp2Page(
   doc: PDFDocument,
   title: string,
@@ -297,6 +300,7 @@ function renderDp2Page(
   drawLabelBox(doc, 'Implantation', CONTENT_LEFT + 10, mapY + 38, 120);
 }
 
+// Optional cadastre cleanup page (kept out of sommaire count).
 function renderCadastrePage(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'CADASTRE - VUE NETTOYÉE');
@@ -310,6 +314,7 @@ function renderCadastrePage(doc: PDFDocument, imagePath: string, footerLabel: st
   }
 }
 
+// DP4 calepinage with project characteristics table.
 function renderDp4Page(
   doc: PDFDocument,
   data: {
@@ -585,6 +590,7 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   const doc = new PDFDocument({ autoFirstPage: false });
   const pdfStream = fs.createWriteStream(pdfPath);
 
+  // Register PDFKit fonts before piping stream.
   registerFonts(doc);
   doc.pipe(pdfStream);
 
@@ -595,8 +601,10 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   const coverTitle = options.cover?.title || 'Installation photovoltaique';
   const installerName = options.cover?.installerName;
   const ownerName = options.cover?.ownerName;
+  // Single source for installer label (propagated to all footers + cover).
   const companyLabel = installerName || 'Dossier réalisé par';
 
+  // Minimal PDF metadata to tag V2 output.
   doc.info = {
     Title: coverTitle,
     Subject: 'Declaration prealable v2',
@@ -611,6 +619,7 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   const orientation = options.project?.orientation || 'Sud';
   const slope = options.project?.slope || '30 degres';
 
+  // V2 page order: cover + DP1 (x3) + DP2A + DP2B + cadastre (optional) + DP4 + DP5 + DP6 + DP7/DP8 + DP11.
   addPage();
   renderCoverPage(
     doc,
