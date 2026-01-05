@@ -182,7 +182,8 @@ function renderCoverPage(
   doc: PDFDocument,
   title: string,
   address: string,
-  cover?: DpOptions['cover']
+  cover: DpOptions['cover'] | undefined,
+  footerLabel: string
 ): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DECLARATION PREALABLE');
@@ -232,6 +233,7 @@ function renderCoverPage(
 
   setBodyFont(doc, 10);
   const sommaire = [
+    'Page de garde',
     'DP1 : Plan de situation',
     'DP2A : Plan de masse (avant)',
     'DP2B : Plan de masse (après)',
@@ -249,7 +251,7 @@ function renderCoverPage(
     });
   });
 
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Dossier DP', right: 'COUVERTURE' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Dossier DP', right: 'COUVERTURE' });
 }
 
 function renderDp1Page(
@@ -257,11 +259,12 @@ function renderDp1Page(
   title: string,
   scaleLabel: string,
   leftImage: string,
-  rightImage?: string
+  rightImage: string | undefined,
+  footerLabel: string
 ): void {
   drawFrame(doc);
   drawTopTitle(doc, title);
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: `Echelle ${scaleLabel}`, right: 'DP1' });
+  drawFooterTriptych(doc, { left: footerLabel, center: `Echelle ${scaleLabel}`, right: 'DP1' });
 
   const mapY = CONTENT_TOP + 30;
 
@@ -276,10 +279,16 @@ function renderDp1Page(
   }
 }
 
-function renderDp2Page(doc: PDFDocument, title: string, scaleLabel: string, imagePath: string): void {
+function renderDp2Page(
+  doc: PDFDocument,
+  title: string,
+  scaleLabel: string,
+  imagePath: string,
+  footerLabel: string
+): void {
   drawFrame(doc);
   drawTopTitle(doc, title);
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: `Echelle ${scaleLabel}`, right: 'DP2' });
+  drawFooterTriptych(doc, { left: footerLabel, center: `Echelle ${scaleLabel}`, right: 'DP2' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP2_MAP_HEIGHT);
@@ -288,10 +297,10 @@ function renderDp2Page(doc: PDFDocument, title: string, scaleLabel: string, imag
   drawLabelBox(doc, 'Implantation', CONTENT_LEFT + 10, mapY + 38, 120);
 }
 
-function renderCadastrePage(doc: PDFDocument, imagePath: string): void {
+function renderCadastrePage(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'CADASTRE - VUE NETTOYÉE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Cadastre', right: 'DP2' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Cadastre', right: 'DP2' });
 
   const mapY = CONTENT_TOP + 30;
   try {
@@ -313,11 +322,12 @@ function renderDp4Page(
     orientation: string;
     slope: string;
   },
-  orthoPath?: string
+  orthoPath: string | undefined,
+  footerLabel: string
 ): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP4 : CALEPINAGE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Calepinage', right: 'DP4' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Calepinage', right: 'DP4' });
 
   const tableX = CONTENT_LEFT;
   const tableY = CONTENT_TOP + 10;
@@ -352,46 +362,46 @@ function renderDp4Page(
   }
 }
 
-function renderDp5Page(doc: PDFDocument, imagePath: string): void {
+function renderDp5Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP5 : VISUALISATION 3D');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Visualisation 3D', right: 'DP5' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Visualisation 3D', right: 'DP5' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP5_MAP_HEIGHT);
 }
 
-function renderDp6Page(doc: PDFDocument, imagePath: string): void {
+function renderDp6Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP6 : INSERTION DU PROJET');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Insertion du projet', right: 'DP6' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Insertion du projet', right: 'DP6' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP6_MAP_HEIGHT);
 }
 
-function renderDp7Page(doc: PDFDocument, imagePath: string): void {
+function renderDp7Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP7 : TERRAIN VU DE PRÈS');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Terrain de près', right: 'DP7' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain de près', right: 'DP7' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
 }
 
-function renderDp8Page(doc: PDFDocument, imagePath: string): void {
+function renderDp8Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP8 : TERRAIN VU DE LOIN');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Terrain de loin', right: 'DP8' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain de loin', right: 'DP8' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
 }
 
-function renderDp7Dp8Page(doc: PDFDocument, dp7Path: string, dp8Path: string): void {
+function renderDp7Dp8Page(doc: PDFDocument, dp7Path: string, dp8Path: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP7/DP8 : PHOTOGRAPHIES');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Photographies', right: 'DP7-8' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Photographies', right: 'DP7-8' });
 
   const mapY = CONTENT_TOP + 24;
   const halfHeight = Math.round(DP7_MAP_HEIGHT * 0.48);
@@ -404,10 +414,10 @@ function renderDp7Dp8Page(doc: PDFDocument, dp7Path: string, dp8Path: string): v
   drawImageBox(doc, dp8Path, CONTENT_LEFT, secondY, CONTENT_WIDTH, halfHeight);
 }
 
-function renderDp11Page(doc: PDFDocument, noticeText: string): void {
+function renderDp11Page(doc: PDFDocument, noticeText: string, footerLabel: string): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DP11 : NOTICE ARCHITECTURALE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Notice architecturale', right: 'DP11' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Notice architecturale', right: 'DP11' });
 
   const textX = CONTENT_LEFT;
   const textY = CONTENT_TOP + 10;
@@ -571,7 +581,7 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
 
   const cadastreViewerPath = await resolveCadastreViewerImage(options.cadastreViewer, outputDir);
 
-  const pdfPath = path.join(outputDir, 'dp-qualiwatt.pdf');
+  const pdfPath = path.join(outputDir, 'dp-v2.pdf');
   const doc = new PDFDocument({ autoFirstPage: false });
   const pdfStream = fs.createWriteStream(pdfPath);
 
@@ -585,6 +595,14 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   const coverTitle = options.cover?.title || 'Installation photovoltaique';
   const installerName = options.cover?.installerName;
   const ownerName = options.cover?.ownerName;
+  const companyLabel = installerName || 'Dossier réalisé par';
+
+  doc.info = {
+    Title: coverTitle,
+    Subject: 'Declaration prealable v2',
+    Keywords: 'dp-generator-v2',
+    Producer: 'dp-generator-v2',
+  };
 
   const powerKw = formatKw(options.project?.powerKw, '9 kWc');
   const surfaceM2 = formatSurface(options.project?.surfaceM2, '40 m2');
@@ -594,30 +612,36 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   const slope = options.project?.slope || '30 degres';
 
   addPage();
-  renderCoverPage(doc, coverTitle, geocoded.label, {
-    logo: options.cover?.logo,
-    installerName,
-    ownerName,
-  });
+  renderCoverPage(
+    doc,
+    coverTitle,
+    geocoded.label,
+    {
+      logo: options.cover?.logo,
+      installerName,
+      ownerName,
+    },
+    companyLabel
+  );
 
   addPage();
-  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000);
+  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000, companyLabel);
 
   addPage();
-  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/2000', assets.dp1.plan2000);
+  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/2000', assets.dp1.plan2000, undefined, companyLabel);
 
   addPage();
-  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/5000', assets.dp1.plan5000);
+  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/5000', assets.dp1.plan5000, undefined, companyLabel);
 
   addPage();
-  renderDp2Page(doc, 'DP2A : PLAN DE MASSE (AVANT)', '1/250', assets.dp2.avant);
+  renderDp2Page(doc, 'DP2A : PLAN DE MASSE (AVANT)', '1/250', assets.dp2.avant, companyLabel);
 
   addPage();
-  renderDp2Page(doc, 'DP2B : PLAN DE MASSE (APRÈS)', '1/250', assets.dp2.apres);
+  renderDp2Page(doc, 'DP2B : PLAN DE MASSE (APRÈS)', '1/250', assets.dp2.apres, companyLabel);
 
   if (cadastreViewerPath) {
     addPage();
-    renderCadastrePage(doc, cadastreViewerPath);
+    renderCadastrePage(doc, cadastreViewerPath, companyLabel);
   }
 
   addPage();
@@ -633,22 +657,24 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
       orientation,
       slope,
     },
-    assets.dp4.ortho
+    assets.dp4.ortho,
+    companyLabel
   );
 
   addPage();
-  renderDp5Page(doc, assets.dp5.ortho);
+  renderDp5Page(doc, assets.dp5.ortho, companyLabel);
 
   addPage();
-  renderDp6Page(doc, assets.dp6.view);
+  renderDp6Page(doc, assets.dp6.view, companyLabel);
 
   addPage();
-  renderDp7Dp8Page(doc, assets.dp7.view, assets.dp8.view);
+  renderDp7Dp8Page(doc, assets.dp7.view, assets.dp8.view, companyLabel);
 
   addPage();
   renderDp11Page(
     doc,
-    buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef, orientation: orientation.toUpperCase() })
+    buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef, orientation: orientation.toUpperCase() }),
+    companyLabel
   );
 
   doc.end();
