@@ -975,23 +975,27 @@
                 <span id="previewAddress"></span>
             </div>
             <div class="preview-content">
-                <div class="preview-grid">
-                    <div class="preview-item" data-page="cover">
-                        <i class="fas fa-file-alt"></i>
-                        <span>Page de garde</span>
-                    </div>
-                    <div class="preview-item" data-page="dp1">
-                        <i class="fas fa-map"></i>
-                        <span>DP1 Plans situation</span>
-                    </div>
-                    <div class="preview-item" data-page="dp2">
-                        <i class="fas fa-draw-polygon"></i>
-                        <span>DP2 Plans masse</span>
-                    </div>
-                    <div class="preview-item" data-page="dp4">
-                        <i class="fas fa-th"></i>
-                        <span>DP4 Calepinage</span>
-                    </div>
+                    <div class="preview-grid">
+                        <div class="preview-item" data-page="cover">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Page de garde</span>
+                        </div>
+                        <div class="preview-item" data-page="dp1">
+                            <i class="fas fa-map"></i>
+                            <span>DP1 Plan de situation</span>
+                        </div>
+                        <div class="preview-item" data-page="dp2a">
+                            <i class="fas fa-draw-polygon"></i>
+                            <span>DP2A Plan de masse avant</span>
+                        </div>
+                        <div class="preview-item" data-page="dp2b">
+                            <i class="fas fa-draw-polygon"></i>
+                            <span>DP2B Plan de masse après</span>
+                        </div>
+                        <div class="preview-item" data-page="dp4">
+                            <i class="fas fa-th"></i>
+                            <span>DP4 Calepinage</span>
+                        </div>
                     <div class="preview-item" data-page="dp5">
                         <i class="fas fa-cube"></i>
                         <span>DP5 Visualisation 3D</span>
@@ -1017,6 +1021,7 @@
                 <div class="preview-lightbox__body">
                     <img id="previewLightboxImage" alt="Aperçu du document" />
                     <p id="previewLightboxCaption"></p>
+                    <p id="previewLightboxMessage" class="hint"></p>
                 </div>
             </div>
         </div>
@@ -1338,19 +1343,22 @@
 
         // Preview tiles (placeholder before génération)
         const previewCaptions = {
-            cover: 'Page de garde — aperçu indicatif avant génération',
-            dp1: 'DP1 Plans de situation — aperçu indicatif',
-            dp2: 'DP2 Plans de masse — aperçu indicatif',
-            dp4: 'DP4 Calepinage — aperçu indicatif',
-            dp5: 'DP5 Visualisation 3D — aperçu indicatif',
-            'dp6-8': 'DP6-8 Photos — aperçu indicatif',
-            dp11: 'DP11 Notice — aperçu indicatif'
+            cover: 'Page de garde',
+            dp1: 'DP1 Plan de situation',
+            dp2a: 'DP2A Plan de masse avant',
+            dp2b: 'DP2B Plan de masse après',
+            dp4: 'DP4 Calepinage',
+            dp5: 'DP5 Visualisation 3D',
+            'dp6-8': 'DP6-8 Photos',
+            dp11: 'DP11 Notice'
         };
 
         function openPreview(pageKey) {
             if (!previewsEnabled()) return;
             previewLightboxImage.src = PREVIEW_PLACEHOLDER;
             previewLightboxCaption.textContent = previewCaptions[pageKey] || 'Aperçu indicatif';
+            const msg = document.getElementById('previewLightboxMessage');
+            msg.textContent = 'Aperçu disponible après implémentation endpoint /preview.';
             previewLightbox.hidden = false;
         }
 
