@@ -1057,8 +1057,14 @@
         let logoDataUrl = null;
         let logoFileName = null;
 
+        // Placeholders par défaut pour éviter tout visuel cassé
+        logoPreviewImage.src = LOGO_PLACEHOLDER;
+        logoPreview.hidden = false;
         logoPreviewImage.onerror = () => {
             logoPreviewImage.src = LOGO_PLACEHOLDER;
+        };
+        previewLightboxImage.onerror = () => {
+            previewLightboxImage.src = PREVIEW_PLACEHOLDER;
         };
 
         // Update progress steps
@@ -1195,9 +1201,8 @@
             logoFileName = null;
             logoInput.value = '';
             logoDropzoneContent.hidden = false;
-            logoPreview.hidden = true;
-            logoPreviewImage.src = '';
-            logoPreviewImage.onerror = null;
+            logoPreview.hidden = false;
+            logoPreviewImage.src = LOGO_PLACEHOLDER;
         }
 
         function setLogoFile(file) {
