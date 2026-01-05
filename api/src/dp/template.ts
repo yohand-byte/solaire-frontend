@@ -10,8 +10,8 @@ export const TEXT_COLOR = '#111827';
 export const BORDER_COLOR = '#D1D5DB';
 export const FOOTER_TEXT = '#6B7280';
 
-const FONT_REGULAR = path.resolve(process.cwd(), 'src/dp/assets/fonts/NotoSans-Regular.ttf');
-const FONT_BOLD = path.resolve(process.cwd(), 'src/dp/assets/fonts/NotoSans-Bold.ttf');
+const FONT_REGULAR = path.join(__dirname, 'src', 'dp', 'assets', 'fonts', 'NotoSans-Regular.ttf');
+const FONT_BOLD = path.join(__dirname, 'src', 'dp', 'assets', 'fonts', 'NotoSans-Bold.ttf');
 
 export type FooterTriptych = {
   left: string;
