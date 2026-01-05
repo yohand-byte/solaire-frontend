@@ -590,6 +590,9 @@
             padding: 1rem;
             background: var(--bg-light);
             border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: var(--shadow);
         }
 
         .preview-item i {
@@ -601,6 +604,70 @@
         .preview-item span {
             display: block;
             font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .preview-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .preview-lightbox {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .preview-lightbox[hidden] {
+            display: none;
+        }
+
+        .preview-lightbox__backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        .preview-lightbox__content {
+            position: relative;
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            padding: 1rem;
+            max-width: 760px;
+            width: 90%;
+            z-index: 1;
+        }
+
+        .preview-lightbox__close {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            border: none;
+            background: transparent;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .preview-lightbox__body {
+            text-align: center;
+            padding-top: 1rem;
+        }
+
+        .preview-lightbox__body img {
+            max-width: 100%;
+            max-height: 520px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-light);
+        }
+
+        .preview-lightbox__body p {
+            margin-top: 0.8rem;
             color: var(--text-secondary);
         }
 
@@ -663,7 +730,7 @@
                 </div>
             </div>
             <div class="header-badge">
-                <i class="fas fa-check-circle"></i> Format Qualiwatt
+                <i class="fas fa-check-circle"></i> Builder Solaire Facile
             </div>
         </div>
     </header>
@@ -878,7 +945,7 @@
                     <span class="btn-text">Générer la DP Mairie</span>
                 </button>
                 <p class="generate-hint">
-                    Le dossier comprend : DP1 à DP11 (12+ pages au format Qualiwatt)
+                    Le dossier comprend : DP1 à DP11 (12+ pages au format Builder Solaire Facile)
                 </p>
 
                 <div class="status-message" id="statusMessage">
@@ -896,34 +963,47 @@
             </div>
             <div class="preview-content">
                 <div class="preview-grid">
-                    <div class="preview-item">
+                    <div class="preview-item" data-page="cover">
                         <i class="fas fa-file-alt"></i>
                         <span>Page de garde</span>
                     </div>
-                    <div class="preview-item">
+                    <div class="preview-item" data-page="dp1">
                         <i class="fas fa-map"></i>
                         <span>DP1 Plans situation</span>
                     </div>
-                    <div class="preview-item">
+                    <div class="preview-item" data-page="dp2">
                         <i class="fas fa-draw-polygon"></i>
                         <span>DP2 Plans masse</span>
                     </div>
-                    <div class="preview-item">
+                    <div class="preview-item" data-page="dp4">
                         <i class="fas fa-th"></i>
                         <span>DP4 Calepinage</span>
                     </div>
-                    <div class="preview-item">
+                    <div class="preview-item" data-page="dp5">
                         <i class="fas fa-cube"></i>
                         <span>DP5 Visualisation 3D</span>
                     </div>
-                    <div class="preview-item">
+                    <div class="preview-item" data-page="dp6-8">
                         <i class="fas fa-image"></i>
                         <span>DP6-8 Photos</span>
                     </div>
-                    <div class="preview-item">
+                    <div class="preview-item" data-page="dp11">
                         <i class="fas fa-file-signature"></i>
                         <span>DP11 Notice</span>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-lightbox" id="previewLightbox" hidden>
+            <div class="preview-lightbox__backdrop"></div>
+            <div class="preview-lightbox__content">
+                <button class="preview-lightbox__close" id="previewLightboxClose" aria-label="Fermer l'aperçu">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="preview-lightbox__body">
+                    <img id="previewLightboxImage" alt="Aperçu du document" />
+                    <p id="previewLightboxCaption"></p>
                 </div>
             </div>
         </div>
@@ -963,13 +1043,28 @@
         const logoPreviewImage = document.getElementById('logoPreviewImage');
         const logoReplaceBtn = document.getElementById('logoReplaceBtn');
         const logoRemoveBtn = document.getElementById('logoRemoveBtn');
+        const previewItems = document.querySelectorAll('.preview-item');
+        const previewLightbox = document.getElementById('previewLightbox');
+        const previewLightboxImage = document.getElementById('previewLightboxImage');
+        const previewLightboxCaption = document.getElementById('previewLightboxCaption');
+        const previewLightboxClose = document.getElementById('previewLightboxClose');
+
+        const LOGO_PLACEHOLDER =
+            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjcwIiB2aWV3Qm94PSIwIDAgMTIwIDcwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNzAiIHJ4PSIxMiIgZmlsbD0iI0VGRUYxRSIgc3Ryb2tlPSIjRDhEQURBIi8+CiAgPHBhdGggZD0iTTM2IDIzQzM2IDE3LjQ3NzEgNDAuNDc3MSAxMyA0NiAxM0g3NEM3OS41MjI5IDEzIDg0IDE3LjQ3NzEgODQgMjNDODQgMjguNTIyOSA3OS41MjI5IDMzIDc0IDMzSDQ2QzQwLjQ3NzEgMzMgMzYgMjguNTIyOSAzNiAyM1oiIGZpbGw9IiNBQkJGRkYiIHN0cm9rZT0iIzhEQkRGRiIvPgogIDxyZWN0IHg9IjI4IiB5PSIzNyIgd2lkdGg9IjY0IiBoZWlnaHQ9IjI4IiByeD0iNiIgZmlsbD0iI0ZGRiIgc3Ryb2tlPSIjRDhEQURBIi8+CiAgPHBhdGggZD0iTTYxLjUgNDdDNTcuMzM4MiA0NyA1NCA1MC4zMzgyIDU0IDU0LjVDNTQgNTguNjYxOCA1Ny4zMzgyIDYyIDYxLjUgNjJDNjUuNjYxOCA2MiA2OSA1OC42NjE4IDY5IDU0LjVDNjkgNTAuMzM4MiA2NS42NjE4IDQ3IDYxLjUgNDdaIiBzdHJva2U9IiM4RERBREYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0iI0VGRUYxRSIvPgo8L3N2Zz4=';
+        const PREVIEW_PLACEHOLDER =
+            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjQyMCIgdmlld0JveD0iMCAwIDYwMCA0MjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMTUiIHk9IjE1IiB3aWR0aD0iNTcwIiBoZWlnaHQ9IjM5MCIgcng9IjIwIiBmaWxsPSIjRkZGIiBzdHJva2U9IiNFNUU5RUIiIHN0cm9rZS13aWR0aD0iMyIvPjxwYXRoIGQ9Ik0xMDEgMzA1SDE1N0wyMTEgMjUxTDI1MyAyOTNMMzI5IDIxNkw0MDMgMjkwTDUwMCAxOTNINzAiIHN0cm9rZT0iI0I5QkNEOSIgc3Ryb2tlLXdpZHRoPSI0IiBmaWxsPSIjRTdFQ0ZFIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PGNpcmNsZSBjeD0iNDAwIiBjeT0iMTQwIiByPSI2MCIgc3Ryb2tlPSIjQjFCNkM4IiBzdHJva2Utd2lkdGg9IjQiIGZpbGw9IiNGRkYiLz48cGF0aCBkPSJNMzY1IDEzOUwzOTAgMTY1TDIzMCAzMjUiIHN0cm9rZT0iI0I5QkNEOSIgc3Ryb2tlLXdpZHRoPSI0IiBmaWxsPSIjRTdFQ0ZFIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48dGV4dCB4PSIyMCIgeT0iNDAwIiBmaWxsPSIjNzA3MDcwIiBmb250LXNpemU9IjI0IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiPkFwZXJjdcOpIHByw6l2aXN1ZWwgLSB2aXN1ZWxsZSBnaW7DqXJpcXVlIHByb3Zpc2lvbm5lbGUuPC90ZXh0Pjwvc3ZnPg==';
 
         let logoDataUrl = null;
         let logoFileName = null;
 
+        logoPreviewImage.onerror = () => {
+            logoPreviewImage.src = LOGO_PLACEHOLDER;
+        };
+
         // Update progress steps
         function updateProgress(step) {
-            document.querySelectorAll('.step').forEach((el, index) => {
+            const steps = document.querySelectorAll('.step');
+            steps.forEach((el, index) => {
                 el.classList.remove('active', 'completed');
                 if (index + 1 < step) {
                     el.classList.add('completed');
@@ -977,6 +1072,9 @@
                     el.classList.add('active');
                 }
             });
+            if (step > steps.length) {
+                steps.forEach(el => el.classList.add('completed'));
+            }
         }
 
         // Address autocomplete
@@ -1099,6 +1197,7 @@
             logoDropzoneContent.hidden = false;
             logoPreview.hidden = true;
             logoPreviewImage.src = '';
+            logoPreviewImage.onerror = null;
         }
 
         function setLogoFile(file) {
@@ -1117,6 +1216,9 @@
             reader.onload = () => {
                 logoDataUrl = reader.result;
                 logoFileName = file.name;
+                logoPreviewImage.onerror = () => {
+                    logoPreviewImage.src = LOGO_PLACEHOLDER;
+                };
                 logoPreviewImage.src = logoDataUrl;
                 logoDropzoneContent.hidden = true;
                 logoPreview.hidden = false;
@@ -1166,6 +1268,37 @@
         });
         logoReplaceBtn.addEventListener('click', () => logoInput.click());
         logoRemoveBtn.addEventListener('click', () => resetLogo());
+
+        // Preview tiles (placeholder before génération)
+        const previewCaptions = {
+            cover: 'Page de garde — aperçu indicatif avant génération',
+            dp1: 'DP1 Plans de situation — aperçu indicatif',
+            dp2: 'DP2 Plans de masse — aperçu indicatif',
+            dp4: 'DP4 Calepinage — aperçu indicatif',
+            dp5: 'DP5 Visualisation 3D — aperçu indicatif',
+            'dp6-8': 'DP6-8 Photos — aperçu indicatif',
+            dp11: 'DP11 Notice — aperçu indicatif'
+        };
+
+        function openPreview(pageKey) {
+            previewLightboxImage.src = PREVIEW_PLACEHOLDER;
+            previewLightboxCaption.textContent = previewCaptions[pageKey] || 'Aperçu indicatif';
+            previewLightbox.hidden = false;
+        }
+
+        function closePreview() {
+            previewLightbox.hidden = true;
+        }
+
+        previewItems.forEach(item => {
+            item.addEventListener('click', () => openPreview(item.dataset.page));
+        });
+        previewLightboxClose.addEventListener('click', closePreview);
+        previewLightbox.addEventListener('click', (e) => {
+            if (e.target.classList.contains('preview-lightbox__backdrop')) {
+                closePreview();
+            }
+        });
 
         // Form submission
         form.addEventListener('submit', async (e) => {
@@ -1224,10 +1357,9 @@
                 a.remove();
 
                 showStatus('success', 'Dossier DP généré avec succès ! Téléchargement en cours...');
-
+                updateProgress(5);
                 setTimeout(() => {
                     hideStatus();
-                    updateProgress(1);
                 }, 3000);
 
             } catch (error) {
