@@ -1442,7 +1442,7 @@
                     ...logoPayload
                 };
 
-                const response = await fetch(`${API_BASE}/api/generate-dp?format=json`, {
+                const response = await fetch(`${API_BASE}/api/generate-dp`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1450,25 +1450,21 @@
                     body: JSON.stringify(formData)
                 });
 
-                const result = await response.json();
-                if (!response.ok || !result || !result.pdfPath) {
-                    throw new Error(result?.error || 'Erreur lors de la génération');
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || 'Erreur lors de la génération');
                 }
 
-                // Download PDF via download endpoint
-                const downloadUrl = `${API_BASE}/api/dp-download?file=${encodeURIComponent(result.pdfPath)}`;
+                // Download PDF directement
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = downloadUrl;
+                a.href = url;
                 a.download = `DP-${formData.maitreOuvrage.replace(/\s+/g, '-')}-${Date.now()}.pdf`;
                 document.body.appendChild(a);
                 a.click();
+                window.URL.revokeObjectURL(url);
                 a.remove();
-
-                // Store preview context
-                window.__DP_PREVIEW__ = {
-                    pdfPath: result.pdfPath,
-                    pageIndexMap: result.pageIndexMap || {}
-                };
 
                 showStatus('success', 'Dossier DP généré avec succès ! Téléchargement en cours...');
                 updateProgress(5);
