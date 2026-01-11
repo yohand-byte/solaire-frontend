@@ -3,7 +3,7 @@ steps:
     args:
       - build
       - "-f"
-      - Dockerfile
+      - apps/master-crm/Dockerfile
       - "-t"
       - "${_IMAGE}"
       - "--build-arg"
