@@ -16,12 +16,16 @@ const serviceAccount = process.env.FIREBASE_CONFIG_B64
   ? JSON.parse(Buffer.from(process.env.FIREBASE_CONFIG_B64, "base64").toString())
   : process.env.FIREBASE_CONFIG
   ? JSON.parse(process.env.FIREBASE_CONFIG)
-  : require("./firebase-service-account.json");
+  : null;
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
-});
+if (serviceAccount) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
+  });
+} else {
+  admin.initializeApp();
+}
 
 const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
@@ -1160,6 +1164,57 @@ app.delete(["/documents/:id", "/api/documents/:id"], requireApiToken, async (req
 
 const PORT = process.env.PORT || 8080;
 const HOST = process.env.HOST || "127.0.0.1";
+
+// ═══════════════════════════════════════════════════════════
+// COMPAT ROUTES (legacy frontend)
+// ═══════════════════════════════════════════════════════════
+
+// Alias: /api/cerfa/generate -> /api/dp/generate
+app.post(["/cerfa/generate", "/api/cerfa/generate"], requireApiToken, (req, res) => {
+  req.url = "/api/dp/generate";
+  return app.handle(req, res);
+});
+
+// PVGIS report for a project (GET/POST)
+const pvgisHandler = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const doc = await db.collection("projects").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "project_not_found" });
+
+    const project = doc.data() || {};
+    const coords = project.estimation?.coordinates || {};
+    const lat = coords.lat ?? coords.latitude;
+    const lon = coords.lon ?? coords.lng ?? coords.longitude;
+
+    if (lat == null || lon == null) return res.status(400).json({ error: "missing_coordinates" });
+
+    const peakpower = parseFloat(project.installation?.power ?? project.estimation?.powerKw ?? 1);
+    const loss = parseFloat(process.env.PVGIS_LOSS ?? 14);
+
+    const { data } = await axios.get("https://re.jrc.ec.europa.eu/api/v5_2/PVcalc", {
+      params: {
+        lat,
+        lon,
+        peakpower,
+        loss,
+        fixed: 1,
+        optimalinclination: 1,
+        outputformat: "json"
+      },
+      timeout: 30000
+    });
+
+    const E_y = data?.outputs?.totals?.fixed?.E_y;
+    return res.json({ ok: true, inputs: { lat, lon, peakpower, loss }, outputs: { E_y }, raw: data });
+  } catch (e) {
+    return res.status(500).json({ error: "pvgis_error", details: (e && e.message) ? e.message : String(e) });
+  }
+};
+
+app.all(["/projects/:id/rapport-pvgis", "/api/projects/:id/rapport-pvgis"], requireApiToken, pvgisHandler);
+
+
 app.listen(PORT, HOST, () => {
   console.log(`API v2.0 running on http://${HOST}:${PORT}`);
 });
