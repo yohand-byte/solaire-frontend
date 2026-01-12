@@ -1215,6 +1215,67 @@ const pvgisHandler = async (req, res) => {
 app.all(["/projects/:id/rapport-pvgis", "/api/projects/:id/rapport-pvgis"], requireApiToken, pvgisHandler);
 
 
+
+// Estimate (legacy frontend): /api/projects/:id/estimate (POST)
+const estimateHandler = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const doc = await db.collection("projects").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "project_not_found" });
+
+    const project = doc.data() || {};
+    const coords = project.estimation?.coordinates || {};
+    const lat = coords.lat ?? coords.latitude;
+    const lon = coords.lon ?? coords.lng ?? coords.longitude;
+
+    if (lat == null || lon == null) {
+      return res.status(400).json({ error: "missing_coordinates" });
+    }
+
+    const peakpower = parseFloat(project.installation?.power ?? project.estimation?.powerKw ?? 1);
+    const loss = parseFloat(process.env.PVGIS_LOSS ?? 14);
+
+    const { data } = await axios.get("https://re.jrc.ec.europa.eu/api/v5_2/PVcalc", {
+      params: {
+        lat,
+        lon,
+        peakpower,
+        loss,
+        fixed: 1,
+        optimalinclination: 1,
+        outputformat: "json"
+      },
+      timeout: 30000
+    });
+
+    const E_y = data?.outputs?.totals?.fixed?.E_y;
+
+    try {
+      await db.collection("projects").doc(id).update({
+        "estimation.pvgis": {
+          E_y,
+          peakpower,
+          loss,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+      });
+    } catch (e) {
+      // ne bloque pas la réponse si Firestore update échoue
+    }
+
+    return res.json({
+      ok: true,
+      projectId: id,
+      inputs: { lat, lon, peakpower, loss },
+      outputs: { E_y },
+      raw: data
+    });
+  } catch (e) {
+    return res.status(500).json({ error: "estimate_error", details: (e && e.message) ? e.message : String(e) });
+  }
+};
+
+app.post(["/projects/:id/estimate", "/api/projects/:id/estimate"], requireApiToken, estimateHandler);
 app.listen(PORT, HOST, () => {
   console.log(`API v2.0 running on http://${HOST}:${PORT}`);
 });
@@ -1507,4 +1568,10 @@ app.post(['/dp/generate', '/api/dp/generate'], requireApiToken, async (req, res)
     console.error('DP Generate error:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+
+// API_JSON_404_FALLBACK
+app.use("/api", (req, res) => {
+  return res.status(404).json({ error: "not_found", path: req.originalUrl });
 });
