@@ -1170,11 +1170,10 @@ const HOST = process.env.HOST || "127.0.0.1";
 // ═══════════════════════════════════════════════════════════
 
 // Alias: /api/cerfa/generate -> /api/dp/generate
-app.post(["/cerfa/generate", "/api/cerfa/generate"], requireApiToken, (req, res) => {
+app.post(["/cerfa/generate", "/api/cerfa/generate"], requireApiToken, (req, res, next) => {
   req.url = "/api/dp/generate";
-  return app.handle(req, res);
+  return app._router.handle(req, res, next);
 });
-
 // PVGIS report for a project (GET/POST)
 const pvgisHandler = async (req, res) => {
   try {
