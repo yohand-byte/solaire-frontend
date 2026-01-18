@@ -3,7 +3,9 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
+import axios from 'axios';
 
+import { getParcelRef } from './cadastre';
 import { geocodeAddress, toLambert93 } from './geo';
 import {
   generateDp1Maps,
@@ -14,6 +16,7 @@ import {
   generateDp7Dp8,
   generateIgnMap,
 } from './images';
+import type { Dp1ManualOverlayOptions } from './images';
 import {
   addDp1Overlays,
   overlaySvgsOnImage,
@@ -35,9 +38,55 @@ import {
   ptToMm,
 } from './template';
 
+type ImageKind =
+  | 'dp1-plan-1000'
+  | 'dp1-ortho-1000'
+  | 'dp1-plan-2000'
+  | 'dp1-plan-5000'
+  | 'dp2-avant'
+  | 'dp2-apres'
+  | 'dp2-cadastre-viewer'
+  | 'dp4-ortho'
+  | 'dp5-ortho'
+  | 'dp6-view'
+  | 'dp7-view'
+  | 'dp8-view';
+
+type SourceOverride = {
+  path?: string;
+  url?: string;
+};
+
 export type DpOptions = {
   outputDir?: string;
   dpi?: number;
+  htmlCartoBaseUrl?: string;
+  sources?: Partial<Record<ImageKind, SourceOverride>>;
+  overlays?: {
+    dp1?: Dp1ManualOverlayOptions;
+  };
+  cover?: {
+    title?: string;
+    installerName?: string;
+    ownerName?: string;
+    logo?: {
+      buffer: Buffer;
+      width?: number;
+      height?: number;
+    };
+  };
+  project?: {
+    powerKw?: number | string;
+    surfaceM2?: number | string;
+    panelType?: string;
+    roofType?: string;
+    orientation?: string;
+    slope?: string;
+  };
+  cadastreViewer?: {
+    url?: string;
+    path?: string;
+  };
 };
 
 export type DpAssets = {
@@ -76,10 +125,10 @@ const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
 const CONTENT_HEIGHT = CONTENT_BOTTOM - CONTENT_TOP;
 
 const DP1_GAP = 16;
-const DP1_MAP_HEIGHT = 240;
+const DP1_MAP_HEIGHT = 420;
 const DP1_MAP_WIDTH = (CONTENT_WIDTH - DP1_GAP) / 2;
 
-const DP1_SINGLE_HEIGHT = 380;
+const DP1_SINGLE_HEIGHT = 560;
 const DP1_SINGLE_WIDTH = CONTENT_WIDTH;
 
 const DP2_MAP_HEIGHT = 380;
@@ -90,7 +139,7 @@ const DP7_MAP_HEIGHT = 420;
 const DP4_ROOF_WIDTH = 180;
 const DP4_ROOF_HEIGHT = 180;
 
-const DEFAULT_DPI = 300;
+const DEFAULT_DPI = 360;
 
 function ensureDir(dirPath: string): Promise<void> {
   return fsPromises.mkdir(dirPath, { recursive: true });
@@ -106,15 +155,172 @@ function drawImageBox(doc: PDFDocument, imagePath: string, x: number, y: number,
   doc.image(imagePath, x, y, { width, height });
 }
 
-function renderCoverPage(doc: PDFDocument, title: string, address: string): void {
+async function validateImage(candidate: string): Promise<string | null> {
+  try {
+    await sharp(candidate).metadata();
+    return candidate;
+  } catch (err) {
+    console.log('[CADASTRE] image validation failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function ensureMinResolution(
+  candidate: string,
+  minWidth?: number,
+  minHeight?: number
+): Promise<boolean> {
+  if (!minWidth && !minHeight) return true;
+  try {
+    const meta = await sharp(candidate).metadata();
+    if (minWidth && (meta.width || 0) < minWidth) return false;
+    if (minHeight && (meta.height || 0) < minHeight) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function downloadImageToPath(url: string, targetPath: string): Promise<string | null> {
+  try {
+    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+    await ensureDir(path.dirname(targetPath));
+    await fsPromises.writeFile(targetPath, Buffer.from(response.data));
+    const valid = await validateImage(targetPath);
+    if (valid) return valid;
+  } catch (err) {
+    console.log('[RENDER] download failed:', err instanceof Error ? err.message : err);
+  }
+  return null;
+}
+
+async function renderSourceImage(params: {
+  kind: ImageKind;
+  outDir: string;
+  fallbackPath: string;
+  build: () => Promise<string>;
+  override?: SourceOverride;
+  htmlCartoBaseUrl?: string;
+  minWidth?: number;
+  minHeight?: number;
+}): Promise<string> {
+  const { kind, outDir, fallbackPath, build, override, htmlCartoBaseUrl, minWidth, minHeight } = params;
+  const candidates: string[] = [];
+
+  if (override?.path) {
+    candidates.push(override.path);
+  }
+
+  const baseUrl = htmlCartoBaseUrl?.replace(/\/$/, '');
+  const htmlCartoUrl = override?.url || (baseUrl ? `${baseUrl}/${kind}.png` : undefined);
+
+  if (htmlCartoUrl) {
+    const targetExt = (() => {
+      try {
+        const parsed = new URL(htmlCartoUrl);
+        const ext = path.extname(parsed.pathname);
+        return ext || '.png';
+      } catch {
+        return '.png';
+      }
+    })();
+    const targetPath = path.join(outDir, `${kind}${targetExt}`);
+    const downloaded = await downloadImageToPath(htmlCartoUrl, targetPath);
+    if (downloaded) {
+      candidates.push(downloaded);
+    }
+  }
+
+  const built = await build();
+  candidates.push(built || fallbackPath);
+
+  for (const candidate of candidates) {
+    const validated = await validateImage(candidate);
+    if (validated && (await ensureMinResolution(validated, minWidth, minHeight))) {
+      return validated;
+    }
+  }
+
+  return fallbackPath;
+}
+
+async function resolveCadastreViewerImage(
+  cadastre: DpOptions['cadastreViewer'],
+  outputDir: string
+): Promise<string | null> {
+  if (!cadastre) return null;
+
+  if (cadastre.path) {
+    try {
+      const stat = await fsPromises.stat(cadastre.path);
+      if (stat.isFile()) {
+        const valid = await validateImage(cadastre.path);
+        if (valid) return valid;
+      }
+    } catch (err) {
+      console.log('[CADASTRE] provided path not readable:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  if (cadastre.url) {
+    try {
+      await ensureDir(outputDir);
+      const target = path.join(outputDir, 'cadastre-viewer.png');
+      const response = await axios.get(cadastre.url, { responseType: 'arraybuffer', timeout: 20000 });
+      await fsPromises.writeFile(target, Buffer.from(response.data));
+      const valid = await validateImage(target);
+      if (valid) return valid;
+    } catch (err) {
+      console.log('[CADASTRE] download failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  return null;
+}
+
+// Cover page renderer: logo + address + V2 sommaire (DP de reference alignment).
+function renderCoverPage(
+  doc: PDFDocument,
+  title: string,
+  address: string,
+  cover: DpOptions['cover'] | undefined,
+  footerLabel: string
+): void {
   drawFrame(doc);
   drawTopTitle(doc, 'DECLARATION PREALABLE');
+
+  if (cover?.logo?.buffer) {
+    const logoWidth = cover.logo.width || 140;
+    const logoHeight = cover.logo.height || 60;
+    const logoX = CONTENT_LEFT;
+    const logoY = FRAME_MARGIN_PT + 28;
+    try {
+      doc.image(cover.logo.buffer, logoX, logoY, {
+        fit: [logoWidth, logoHeight],
+        align: 'left',
+        valign: 'center',
+      });
+    } catch {
+      // Ignore invalid logo buffers.
+    }
+  }
 
   setBoldFont(doc, 18);
   doc.text(title, 0, CONTENT_TOP + 10, { align: 'center', width: PAGE_WIDTH_PT });
 
   setBodyFont(doc, 11);
   doc.text(address, 0, CONTENT_TOP + 45, { align: 'center', width: PAGE_WIDTH_PT });
+
+  if (cover?.installerName || cover?.ownerName) {
+    const lines = [
+      cover.installerName ? `Installateur : ${cover.installerName}` : null,
+      cover.ownerName ? `Maitre d'ouvrage : ${cover.ownerName}` : null,
+    ].filter(Boolean);
+    if (lines.length) {
+      setBodyFont(doc, 10);
+      doc.text(lines.join('\n'), 0, CONTENT_TOP + 65, { align: 'center', width: PAGE_WIDTH_PT });
+    }
+  }
 
   doc
     .lineWidth(0.8)
@@ -128,17 +334,16 @@ function renderCoverPage(doc: PDFDocument, title: string, address: string): void
 
   setBodyFont(doc, 10);
   const sommaire = [
-    'DP1 - Plan de situation (1/1000)',
-    'DP1 - Plan de situation (1/2000)',
-    'DP1 - Plan de situation (1/5000)',
-    'DP2 - Plan de masse (Avant)',
-    'DP2 - Plan de masse (Apres)',
-    'DP4 - Fiche technique',
-    'DP5 - Insertion graphique',
-    'DP6 - Insertion photographique',
-    'DP7 - Photographie proche',
-    'DP8 - Photographie lointaine',
-    'DP11 - Notice descriptive',
+    'Page de garde',
+    'DP1 : Plan de situation',
+    'DP2A : Plan de masse (avant)',
+    'DP2B : Plan de masse (après)',
+    'DP4 : Calepinage',
+    'DP5 : Visualisation 3D',
+    'DP6 : Insertion du projet',
+    'DP7 : Terrain vu de près',
+    'DP8 : Terrain vu de loin',
+    'DP11 : Note architecturale',
   ];
 
   sommaire.forEach((item, index) => {
@@ -147,19 +352,21 @@ function renderCoverPage(doc: PDFDocument, title: string, address: string): void
     });
   });
 
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Dossier DP', right: 'COUVERTURE' });
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Dossier DP', right: 'COUVERTURE' });
 }
 
+// DP1 renderer (3 scales) with shared footer label (installer).
 function renderDp1Page(
   doc: PDFDocument,
   title: string,
   scaleLabel: string,
   leftImage: string,
-  rightImage?: string
+  rightImage: string | undefined,
+  footerLabel: string
 ): void {
   drawFrame(doc);
   drawTopTitle(doc, title);
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: `Echelle ${scaleLabel}`, right: 'DP1' });
+  drawFooterTriptych(doc, { left: footerLabel, center: `Echelle ${scaleLabel}`, right: 'DP1' });
 
   const mapY = CONTENT_TOP + 30;
 
@@ -174,10 +381,17 @@ function renderDp1Page(
   }
 }
 
-function renderDp2Page(doc: PDFDocument, title: string, scaleLabel: string, imagePath: string): void {
+// DP2 renderer for avant/apres plans.
+function renderDp2Page(
+  doc: PDFDocument,
+  title: string,
+  scaleLabel: string,
+  imagePath: string,
+  footerLabel: string
+): void {
   drawFrame(doc);
   drawTopTitle(doc, title);
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: `Echelle ${scaleLabel}`, right: 'DP2' });
+  drawFooterTriptych(doc, { left: footerLabel, center: `Echelle ${scaleLabel}`, right: 'DP2' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP2_MAP_HEIGHT);
@@ -186,6 +400,21 @@ function renderDp2Page(doc: PDFDocument, title: string, scaleLabel: string, imag
   drawLabelBox(doc, 'Implantation', CONTENT_LEFT + 10, mapY + 38, 120);
 }
 
+// Optional cadastre cleanup page (kept out of sommaire count).
+function renderCadastrePage(doc: PDFDocument, imagePath: string, footerLabel: string): void {
+  drawFrame(doc);
+  drawTopTitle(doc, 'CADASTRE - VUE NETTOYÉE');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Cadastre', right: 'DP2' });
+
+  const mapY = CONTENT_TOP + 30;
+  try {
+    drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP2_MAP_HEIGHT);
+  } catch (err) {
+    console.log('[CADASTRE] render skipped:', err instanceof Error ? err.message : err);
+  }
+}
+
+// DP4 calepinage with project characteristics table.
 function renderDp4Page(
   doc: PDFDocument,
   data: {
@@ -198,11 +427,12 @@ function renderDp4Page(
     orientation: string;
     slope: string;
   },
-  orthoPath?: string
+  orthoPath: string | undefined,
+  footerLabel: string
 ): void {
   drawFrame(doc);
-  drawTopTitle(doc, 'DP4 - FICHE TECHNIQUE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Echelle 1/250', right: 'DP4' });
+  drawTopTitle(doc, 'DP4 : CALEPINAGE');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Calepinage', right: 'DP4' });
 
   const tableX = CONTENT_LEFT;
   const tableY = CONTENT_TOP + 10;
@@ -237,46 +467,62 @@ function renderDp4Page(
   }
 }
 
-function renderDp5Page(doc: PDFDocument, imagePath: string): void {
+function renderDp5Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
-  drawTopTitle(doc, 'DP5 - INSERTION GRAPHIQUE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Echelle 1/500', right: 'DP5' });
+  drawTopTitle(doc, 'DP5 : VISUALISATION 3D');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Visualisation 3D', right: 'DP5' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP5_MAP_HEIGHT);
 }
 
-function renderDp6Page(doc: PDFDocument, imagePath: string): void {
+function renderDp6Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
-  drawTopTitle(doc, 'DP6 - INSERTION PHOTOGRAPHIQUE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Vue terrain', right: 'DP6' });
+  drawTopTitle(doc, 'DP6 : INSERTION DU PROJET');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Insertion du projet', right: 'DP6' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP6_MAP_HEIGHT);
 }
 
-function renderDp7Page(doc: PDFDocument, imagePath: string): void {
+function renderDp7Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
-  drawTopTitle(doc, 'DP7 - PHOTOGRAPHIE PROCHE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Vue terrain', right: 'DP7' });
+  drawTopTitle(doc, 'DP7 : TERRAIN VU DE PRÈS');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain vu de près', right: 'DP7' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
 }
 
-function renderDp8Page(doc: PDFDocument, imagePath: string): void {
+function renderDp8Page(doc: PDFDocument, imagePath: string, footerLabel: string): void {
   drawFrame(doc);
-  drawTopTitle(doc, 'DP8 - PHOTOGRAPHIE LOINTAINE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Vue terrain', right: 'DP8' });
+  drawTopTitle(doc, 'DP8 : TERRAIN VU DE LOIN');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Terrain vu de loin', right: 'DP8' });
 
   const mapY = CONTENT_TOP + 30;
   drawImageBox(doc, imagePath, CONTENT_LEFT, mapY, CONTENT_WIDTH, DP7_MAP_HEIGHT);
 }
 
-function renderDp11Page(doc: PDFDocument, noticeText: string): void {
+function renderDp7Dp8Page(doc: PDFDocument, dp7Path: string, dp8Path: string, footerLabel: string): void {
   drawFrame(doc);
-  drawTopTitle(doc, 'DP11 - NOTICE DESCRIPTIVE');
-  drawFooterTriptych(doc, { left: 'QUALIWATT', center: 'Notice', right: 'DP11' });
+  drawTopTitle(doc, 'DP7/DP8 : PHOTOGRAPHIES');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Photographies', right: 'DP7-8' });
+
+  const mapY = CONTENT_TOP + 24;
+  const halfHeight = Math.round(DP7_MAP_HEIGHT * 0.48);
+
+  drawLabelBox(doc, 'DP7 : Terrain vu de près', CONTENT_LEFT, mapY - 18, CONTENT_WIDTH);
+  drawImageBox(doc, dp7Path, CONTENT_LEFT, mapY, CONTENT_WIDTH, halfHeight);
+
+  const secondY = mapY + halfHeight + 26;
+  drawLabelBox(doc, 'DP8 : Terrain vu de loin', CONTENT_LEFT, secondY - 18, CONTENT_WIDTH);
+  drawImageBox(doc, dp8Path, CONTENT_LEFT, secondY, CONTENT_WIDTH, halfHeight);
+}
+
+function renderDp11Page(doc: PDFDocument, noticeText: string, footerLabel: string): void {
+  drawFrame(doc);
+  drawTopTitle(doc, 'DP11 : NOTICE ARCHITECTURALE');
+  drawFooterTriptych(doc, { left: footerLabel, center: 'Notice architecturale', right: 'DP11' });
 
   const textX = CONTENT_LEFT;
   const textY = CONTENT_TOP + 10;
@@ -304,6 +550,26 @@ function buildNoticeText(data: { city: string; parcelRef: string; orientation: s
     '',
     'Aucun arbre ne sera abattu.',
   ].join('\n');
+}
+
+function formatKw(value: number | string | undefined, fallback: string): string {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  if (typeof value === 'number') {
+    return `${value} kWc`;
+  }
+  return value;
+}
+
+function formatSurface(value: number | string | undefined, fallback: string): string {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  if (typeof value === 'number') {
+    return `${value} m2`;
+  }
+  return value;
 }
 
 async function addPanelsOverlay(basePath: string, outPath: string): Promise<string> {
@@ -348,8 +614,29 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
 
   await ensureDir(outputDir);
 
+  const sources = options.sources || {};
+  const htmlCartoBaseUrl = options.htmlCartoBaseUrl || process.env.HTML_CARTO_BASE_URL;
+  const resolveSourceImage = (
+    kind: ImageKind,
+    fallbackPath: string,
+    minWidth?: number,
+    minHeight?: number
+  ): Promise<string> =>
+    renderSourceImage({
+      kind,
+      outDir: outputDir,
+      fallbackPath,
+      build: async () => fallbackPath,
+      override: sources[kind],
+      htmlCartoBaseUrl,
+      minWidth,
+      minHeight,
+    });
+
   const geocoded = await geocodeAddress(address);
   const center = toLambert93({ lat: geocoded.lat, lon: geocoded.lon });
+  const parcelInfo = await getParcelRef(geocoded.lat, geocoded.lon, geocoded.citycode);
+  const parcelRef = parcelInfo?.ref || 'XX 0000';
 
   const dp1Frames = {
     frame1000: { widthMm: ptToMm(DP1_MAP_WIDTH), heightMm: ptToMm(DP1_MAP_HEIGHT) },
@@ -358,7 +645,7 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   };
 
   const dp1Maps = await generateDp1Maps(center, outputDir, dp1Frames, dpi);
-  const dp1Overlays = await generateDp1Overlays(dp1Maps, outputDir);
+  const dp1Overlays = await generateDp1Overlays(dp1Maps, outputDir, options.overlays?.dp1);
 
   const dp1Plan2000Overlay = path.join(outputDir, 'dp1-plan-2000-overlay.png');
   const dp1Plan5000Overlay = path.join(outputDir, 'dp1-plan-5000-overlay.png');
@@ -388,89 +675,169 @@ export async function generateDpPack(address: string, options: DpOptions = {}): 
   const dp6Image = await generateDp6(geocoded.lat, geocoded.lon, outputDir);
   const dp7dp8 = await generateDp7Dp8(geocoded.lat, geocoded.lon, outputDir);
 
+  const dp1Plan1000 = await resolveSourceImage('dp1-plan-1000', dp1Overlays.plan1000, 2000, 1400);
+  const dp1Ortho1000 = await resolveSourceImage('dp1-ortho-1000', dp1Overlays.ortho1000, 2000, 1400);
+  const dp1Plan2000 = await resolveSourceImage('dp1-plan-2000', dp1Plan2000Overlay, 2000, 1400);
+  const dp1Plan5000 = await resolveSourceImage('dp1-plan-5000', dp1Plan5000Overlay, 2000, 1400);
+
+  const dp2AvantPath = await resolveSourceImage('dp2-avant', dp2Base.avant, 2000, 1400);
+  const dp2ApresPath = await resolveSourceImage('dp2-apres', dp2Apres, 2000, 1400);
+
+  const dp4OrthoPath = await resolveSourceImage('dp4-ortho', dp4Ortho, 1800, 1200);
+  const dp5ImagePath = await resolveSourceImage('dp5-ortho', dp5Image, 2200, 1400);
+  const dp6ImagePath = await resolveSourceImage('dp6-view', dp6Image, 2200, 1400);
+  const dp7ImagePath = await resolveSourceImage('dp7-view', dp7dp8.dp7, 2000, 1400);
+  const dp8ImagePath = await resolveSourceImage('dp8-view', dp7dp8.dp8, 2000, 1400);
+
   const assets: DpAssets = {
     dp1: {
-      plan1000: dp1Overlays.plan1000,
-      ortho1000: dp1Overlays.ortho1000,
-      plan2000: dp1Plan2000Overlay,
-      plan5000: dp1Plan5000Overlay,
+      plan1000: dp1Plan1000,
+      ortho1000: dp1Ortho1000,
+      plan2000: dp1Plan2000,
+      plan5000: dp1Plan5000,
     },
     dp2: {
-      avant: dp2Base.avant,
-      apres: dp2Apres,
+      avant: dp2AvantPath,
+      apres: dp2ApresPath,
     },
     dp4: {
-      ortho: dp4Ortho,
+      ortho: dp4OrthoPath,
     },
     dp5: {
-      ortho: dp5Image,
+      ortho: dp5ImagePath,
     },
     dp6: {
-      view: dp6Image,
+      view: dp6ImagePath,
     },
     dp7: {
-      view: dp7dp8.dp7,
+      view: dp7ImagePath,
     },
     dp8: {
-      view: dp7dp8.dp8,
+      view: dp8ImagePath,
     },
   };
 
-  const pdfPath = path.join(outputDir, 'dp-qualiwatt.pdf');
-  const doc = new PDFDocument({ size: [PAGE_WIDTH_PT, PAGE_HEIGHT_PT], margin: 0 });
+  const cadastreViewerRaw = await resolveCadastreViewerImage(options.cadastreViewer, outputDir);
+  const cadastreViewerPath = cadastreViewerRaw
+    ? await renderSourceImage({
+        kind: 'dp2-cadastre-viewer',
+        outDir: outputDir,
+        fallbackPath: cadastreViewerRaw,
+        build: async () => cadastreViewerRaw,
+        override: sources['dp2-cadastre-viewer'],
+        htmlCartoBaseUrl,
+        minWidth: 2000,
+        minHeight: 1400,
+      })
+    : null;
 
+  const pdfPath = path.join(outputDir, 'dp-v2.pdf');
+  const doc = new PDFDocument({ autoFirstPage: false });
+  const pdfStream = fs.createWriteStream(pdfPath);
+
+  // Register PDFKit fonts before piping stream.
   registerFonts(doc);
-  doc.pipe(fs.createWriteStream(pdfPath));
+  doc.pipe(pdfStream);
 
-  renderCoverPage(doc, 'Installation photovoltaique', geocoded.label);
+  const addPage = (): void => {
+    doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+  };
 
-  doc.addPage();
-  renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000);
+  const coverTitle = options.cover?.title || 'Installation photovoltaique';
+  const installerName = options.cover?.installerName;
+  const ownerName = options.cover?.ownerName;
+  // Single source for installer label (propagated to all footers + cover).
+  const companyLabel = installerName || 'Dossier réalisé par';
 
-  doc.addPage();
-  renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/2000', assets.dp1.plan2000);
+  // Minimal PDF metadata to tag V2 output.
+  doc.info = {
+    Title: coverTitle,
+    Subject: 'Declaration prealable v2',
+    Keywords: 'dp-generator-v2',
+    Producer: 'dp-generator-v2',
+  };
 
-  doc.addPage();
-  renderDp1Page(doc, 'DP1 - PLAN DE SITUATION', '1/5000', assets.dp1.plan5000);
+  const powerKw = formatKw(options.project?.powerKw, '9 kWc');
+  const surfaceM2 = formatSurface(options.project?.surfaceM2, '40 m2');
+  const panelType = options.project?.panelType || 'Noirs mats';
+  const roofType = options.project?.roofType || 'Tuiles';
+  const orientation = options.project?.orientation || 'Sud';
+  const slope = options.project?.slope || '30 degres';
 
-  doc.addPage();
-  renderDp2Page(doc, 'DP2 - PLAN DE MASSE AVANT', '1/250', assets.dp2.avant);
+  // V2 page order: cover + DP1 (x3) + DP2A + DP2B + cadastre (optional) + DP4 + DP5 + DP6 + DP7/DP8 + DP11.
+  addPage();
+  renderCoverPage(
+    doc,
+    coverTitle,
+    geocoded.label,
+    {
+      logo: options.cover?.logo,
+      installerName,
+      ownerName,
+    },
+    companyLabel
+  );
 
-  doc.addPage();
-  renderDp2Page(doc, 'DP2 - PLAN DE MASSE APRES', '1/250', assets.dp2.apres);
+  addPage();
+  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/1000', assets.dp1.plan1000, assets.dp1.ortho1000, companyLabel);
 
-  doc.addPage();
+  addPage();
+  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/2000', assets.dp1.plan2000, undefined, companyLabel);
+
+  addPage();
+  renderDp1Page(doc, 'DP1 : PLAN DE SITUATION', '1/5000', assets.dp1.plan5000, undefined, companyLabel);
+
+  addPage();
+  renderDp2Page(doc, 'DP2A : PLAN DE MASSE (AVANT)', '1/250', assets.dp2.avant, companyLabel);
+
+  addPage();
+  renderDp2Page(doc, 'DP2B : PLAN DE MASSE (APRÈS)', '1/250', assets.dp2.apres, companyLabel);
+
+  if (cadastreViewerPath) {
+    addPage();
+    renderCadastrePage(doc, cadastreViewerPath, companyLabel);
+  }
+
+  addPage();
   renderDp4Page(
     doc,
     {
       address: geocoded.label,
-      parcelRef: 'XX 0000',
-      powerKw: '9 kWc',
-      surfaceM2: '40 m2',
-      panelType: 'Noirs mats',
-      roofType: 'Tuiles',
-      orientation: 'Sud',
-      slope: '30 degres',
+      parcelRef,
+      powerKw,
+      surfaceM2,
+      panelType,
+      roofType,
+      orientation,
+      slope,
     },
-    assets.dp4.ortho
+    assets.dp4.ortho,
+    companyLabel
   );
 
-  doc.addPage();
-  renderDp5Page(doc, assets.dp5.ortho);
+  addPage();
+  renderDp5Page(doc, assets.dp5.ortho, companyLabel);
 
-  doc.addPage();
-  renderDp6Page(doc, assets.dp6.view);
+  addPage();
+  renderDp6Page(doc, assets.dp6.view, companyLabel);
 
-  doc.addPage();
-  renderDp7Page(doc, assets.dp7.view);
+  addPage();
+  renderDp7Dp8Page(doc, assets.dp7.view, assets.dp8.view, companyLabel);
 
-  doc.addPage();
-  renderDp8Page(doc, assets.dp8.view);
-
-  doc.addPage();
-  renderDp11Page(doc, buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef: 'XX 0000', orientation: 'SUD' }));
+  addPage();
+  renderDp11Page(
+    doc,
+    buildNoticeText({ city: geocoded.city || 'VILLE', parcelRef, orientation: orientation.toUpperCase() }),
+    companyLabel
+  );
 
   doc.end();
+
+  await new Promise<void>((resolve, reject) => {
+    pdfStream.on('finish', resolve);
+    pdfStream.on('error', reject);
+    doc.on('error', reject);
+  });
 
   return pdfPath;
 }
