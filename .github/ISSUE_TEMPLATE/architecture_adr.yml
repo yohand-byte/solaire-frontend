@@ -1,0 +1,50 @@
+name: "Architecture / ADR"
+description: "Changement d’architecture cadré par une ADR (sans exécution ici)."
+title: "[P1][ARCH] <résumé>"
+labels: ["P1", "architecture", "adr"]
+body:
+  - type: input
+    id: adr_ref
+    attributes:
+      label: "ADR liée (obligatoire)"
+      placeholder: "ADR-0002"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: "Contexte / problème"
+      placeholder: "Pourquoi on change, symptôme, contrainte “sans régression CRM”."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Décision / proposition"
+      placeholder: "Composants, frontières, flux, auth, données."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Scope + non-scope"
+      placeholder: "Ce qui est inclus/exclu (pas de refonte CRM)."
+    validations:
+      required: true
+  - type: textarea
+    id: milestones
+    attributes:
+      label: "Plan / jalons"
+      placeholder: |
+        M1: design + contrat API
+        M2: implémentation
+        M3: tests + rollout
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: "Definition of Done"
+      placeholder: "Tests, docs, monitoring, rollback documenté."
+    validations:
+      required: true

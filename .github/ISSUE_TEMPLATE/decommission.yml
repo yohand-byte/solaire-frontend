@@ -1,0 +1,41 @@
+name: "Decommission / Retrait"
+description: "Retrait contrôlé (service/secret/bucket) avec preuve d’inutilité + rollback."
+title: "[DECOM] <résumé>"
+labels: ["cleanup", "decommission"]
+body:
+  - type: textarea
+    id: inventory
+    attributes:
+      label: "Inventaire à retirer (obligatoire)"
+      placeholder: "Service(s), routes, secrets (noms), buckets (noms), IAM bindings."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence_unused
+    attributes:
+      label: "Preuve UNUSED (obligatoire)"
+      description: "Logs, absence d’appels, absence de dépendances, code refs."
+      placeholder: "Ex: 30j sans trafic + aucune référence code + aucun caller."
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: "Plan de retrait (obligatoire)"
+      placeholder: "Étapes, fenêtre, monitoring, critères de stop."
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: "Rollback (obligatoire)"
+      placeholder: "Réactiver service, restaurer IAM/spec, remettre secret version."
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: "Validation post-retrait (obligatoire)"
+      placeholder: "Dashboards/logs, tests fonctionnels, absence d’erreurs."
+    validations:
+      required: true

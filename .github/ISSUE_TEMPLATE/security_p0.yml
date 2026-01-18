@@ -1,0 +1,67 @@
+name: "P0 Sécurité"
+description: "Durcissement immédiat (IAM Run, secrets, IAM projet, Firestore) avec preuve + rollback."
+title: "[P0][SEC] <résumé>"
+labels: ["P0", "security"]
+body:
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Preuve actuelle (obligatoire)"
+      description: |
+        Inclure références aux exports (ex: /tmp/run_iam/*.json, /tmp/cloudrun_curl.log, /tmp/project_iam/*.json).
+        Aucune valeur de secret en clair.
+      placeholder: |
+        - /tmp/run_iam/... montre allUsers roles/run.invoker
+        - /tmp/cloudrun_curl.log montre 200/400 sans auth
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Scope + non-scope"
+      placeholder: |
+        Scope: services/projets concernés.
+        Non-scope: pas de modification de logique métier, pas de refonte UI, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: "Plan de changement (haut niveau) (obligatoire)"
+      description: "Étapes séquentielles, une action à la fois, avec points de contrôle."
+      placeholder: |
+        1) Backup IAM/spec/ruleset
+        2) Appliquer changement sur 1 service
+        3) Valider (curl/IAM/logs)
+        4) Étendre au service suivant
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: "Rollout (ordre exact des services)"
+      placeholder: |
+        Ordre: <service1> -> <service2> -> ...
+        Gates: 401/403 attendus, smoke test UI, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: "Rollback (obligatoire)"
+      placeholder: |
+        - run services set-iam-policy depuis backup
+        - update-traffic vers révision précédente
+        - releases update vers ruleset précédent
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: "Definition of Done (obligatoire)"
+      placeholder: |
+        - Preuve post-change (exports + curl)
+        - Aucun allUsers non voulu
+        - Aucun endpoint sensible accessible anonymement
+    validations:
+      required: true
