@@ -1,0 +1,7 @@
+core-api
+dp-generator
+html-carto-api
+sendclientmagiclink
+solaire-api
+solaire-dp-generator
+solaire-frontend

@@ -1,0 +1,158 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "35096934-568a-4d82-97f1-5d0c9d93f0d1",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/gentle-mapper-479320-j1/cloud-run-source-deploy/solaire-api",
+      "run.googleapis.com/build-name": "projects/828508661560/locations/europe-west1/builds/35096934-568a-4d82-97f1-5d0c9d93f0d1",
+      "run.googleapis.com/build-source-location": "gs://run-sources-gentle-mapper-479320-j1-europe-west1/services/solaire-api/1768234935.624177-4affde0649934762bae880c747e2767a.zip#1768234944442239",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/operation-id": "7634d6e0-9baa-4588-92b5-7a49a15e7fac",
+      "run.googleapis.com/urls": "[\"https://solaire-api-828508661560.europe-west1.run.app\",\"https://solaire-api-xfwqgqc7ca-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2025-12-09T07:33:54.765941Z",
+    "generation": 137,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "solaire-api",
+    "namespace": "828508661560",
+    "resourceVersion": "AAZIPw7Rbwc",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/828508661560/services/solaire-api",
+    "uid": "acc4d079-85e2-46a1-8a94-426159468beb"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "3",
+          "autoscaling.knative.dev/minScale": "1",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "atvuhjbiuh",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 1,
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "CADASTRE_BUFFER_M",
+                "value": "30"
+              },
+              {
+                "name": "GOOGLE_CLOUD_PROJECT",
+                "value": "solaire-frontend"
+              },
+              {
+                "name": "GCLOUD_PROJECT",
+                "value": "solaire-frontend"
+              }
+            ],
+            "image": "europe-west1-docker.pkg.dev/gentle-mapper-479320-j1/cloud-run-source-deploy/solaire-api@sha256:1c4a6b706436eb899e54aa9f8bdb5570b21b13fce2a03c11c5581c86b1b8b5eb",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "828508661560-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 900
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      },
+      {
+        "revisionName": "solaire-api-00098-4w8",
+        "tag": "api-00098"
+      },
+      {
+        "revisionName": "solaire-api-00099-lvw",
+        "tag": "api-00099"
+      },
+      {
+        "revisionName": "solaire-api-00100-ctl",
+        "tag": "api-00100"
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://solaire-api-xfwqgqc7ca-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-01-13T06:25:29.009927Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-01-13T06:25:21.994335Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2026-01-13T06:25:28.963348Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "solaire-api-00120-p82",
+    "latestReadyRevisionName": "solaire-api-00120-p82",
+    "observedGeneration": 137,
+    "traffic": [
+      {
+        "revisionName": "solaire-api-00098-4w8",
+        "tag": "api-00098",
+        "url": "https://api-00098---solaire-api-xfwqgqc7ca-ew.a.run.app"
+      },
+      {
+        "revisionName": "solaire-api-00099-lvw",
+        "tag": "api-00099",
+        "url": "https://api-00099---solaire-api-xfwqgqc7ca-ew.a.run.app"
+      },
+      {
+        "revisionName": "solaire-api-00100-ctl",
+        "tag": "api-00100",
+        "url": "https://api-00100---solaire-api-xfwqgqc7ca-ew.a.run.app"
+      },
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "solaire-api-00120-p82"
+      }
+    ],
+    "url": "https://solaire-api-xfwqgqc7ca-ew.a.run.app"
+  }
+}

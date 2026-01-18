@@ -1,0 +1,123 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "17933c65-83bf-4d2e-8ad8-f9fd00ac11c0",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/gentle-mapper-479320-j1/cloud-run-source-deploy/cerfa-api",
+      "run.googleapis.com/build-name": "projects/828508661560/locations/europe-west1/builds/17933c65-83bf-4d2e-8ad8-f9fd00ac11c0",
+      "run.googleapis.com/build-source-location": "gs://run-sources-gentle-mapper-479320-j1-europe-west1/services/cerfa-api/1766918862.091357-8546020cfb8c48ceb0061bd999210311.zip#1766918862804982",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "5",
+      "run.googleapis.com/operation-id": "92ec34e0-3dd0-4b2d-97cc-524ba3781b05",
+      "run.googleapis.com/urls": "[\"https://cerfa-api-828508661560.europe-west1.run.app\",\"https://cerfa-api-xfwqgqc7ca-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2025-12-28T10:43:51.257517Z",
+    "generation": 2,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "cerfa-api",
+    "namespace": "828508661560",
+    "resourceVersion": "AAZHAN4sesg",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/828508661560/services/cerfa-api",
+    "uid": "8cc5acdd-635a-46ae-a302-a3cae5c531e7"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "5",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "kaqgdyhtiu",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "API_KEY",
+                "value": "c1c99a74e81712318960f4f3b6f5f40308ea18f4aee2f33d"
+              }
+            ],
+            "image": "europe-west1-docker.pkg.dev/gentle-mapper-479320-j1/cloud-run-source-deploy/cerfa-api@sha256:19fcff68f74d16ad3cadcac447cc53137da7b7e5ccbea9ca489d2d7696b72d87",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1000m",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "828508661560-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 300
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://cerfa-api-xfwqgqc7ca-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2025-12-28T10:48:33.293Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2025-12-28T10:48:25.948113Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2025-12-28T10:48:33.264676Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "cerfa-api-00002-j2k",
+    "latestReadyRevisionName": "cerfa-api-00002-j2k",
+    "observedGeneration": 2,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "cerfa-api-00002-j2k"
+      }
+    ],
+    "url": "https://cerfa-api-xfwqgqc7ca-ew.a.run.app"
+  }
+}

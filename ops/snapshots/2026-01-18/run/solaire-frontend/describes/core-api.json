@@ -1,0 +1,117 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-base-image": "europe-west1-docker.pkg.dev/serverless-runtimes/google-22/run/universal:public-image-next",
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "3ff6e1be-9c65-4cd9-b865-c91246b62bad",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/solaire-frontend/cloud-run-source-deploy/core-api",
+      "run.googleapis.com/build-name": "projects/29459740400/locations/europe-west1/builds/3ff6e1be-9c65-4cd9-b865-c91246b62bad",
+      "run.googleapis.com/build-source-location": "gs://run-sources-solaire-frontend-europe-west1/services/core-api/1766437838.000617-682d7831bb1a4985b2277f974e20795f.zip#1766437841778588",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "20",
+      "run.googleapis.com/operation-id": "17c2f7d5-0272-4098-bd30-d8872c9d9fa5",
+      "run.googleapis.com/urls": "[\"https://core-api-29459740400.europe-west1.run.app\",\"https://core-api-z5hnfoy7ya-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2025-12-22T21:11:58.101395Z",
+    "generation": 1,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "core-api",
+    "namespace": "29459740400",
+    "resourceVersion": "AAZGkOFNnjc",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/29459740400/services/core-api",
+    "uid": "7b6a1913-e5f1-4715-b596-89483417f70f"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "zhwoaqslke",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "image": "europe-west1-docker.pkg.dev/solaire-frontend/cloud-run-source-deploy/core-api@sha256:efed9903f0decc9a4485558e81777e10f6ccc31c4beaf6d0c456d531bb472408",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1000m",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "29459740400-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 300
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://core-api-z5hnfoy7ya-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2025-12-22T21:12:09.459255Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2025-12-22T21:12:03.551275Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2025-12-22T21:12:09.427823Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "core-api-00001-gkk",
+    "latestReadyRevisionName": "core-api-00001-gkk",
+    "observedGeneration": 1,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "core-api-00001-gkk"
+      }
+    ],
+    "url": "https://core-api-z5hnfoy7ya-ew.a.run.app"
+  }
+}

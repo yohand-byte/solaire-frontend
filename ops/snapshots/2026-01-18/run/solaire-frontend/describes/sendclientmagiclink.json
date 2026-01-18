@@ -1,0 +1,211 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "cloudfunctions.googleapis.com/function-id": "sendClientMagicLink",
+      "run.googleapis.com/build-base-image": "europe-west1-docker.pkg.dev/serverless-runtimes/google-24-full/runtimes/nodejs24",
+      "run.googleapis.com/build-enable-automatic-updates": "true",
+      "run.googleapis.com/build-environment-variables": "{\"GOOGLE_NODE_RUN_SCRIPTS\":\"\"}",
+      "run.googleapis.com/build-function-target": "sendClientMagicLink",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/solaire-frontend/gcf-artifacts/solaire--frontend__europe--west1__send_client_magic_link:version_1",
+      "run.googleapis.com/build-name": "projects/29459740400/locations/europe-west1/builds/a89a93eb-a03d-449e-8999-33f6665ab427",
+      "run.googleapis.com/build-service-account": "projects/solaire-frontend/serviceAccounts/29459740400-compute@developer.gserviceaccount.com",
+      "run.googleapis.com/build-source-location": "gs://gcf-v2-sources-29459740400-europe-west1/sendClientMagicLink/function-source.zip#1766758479443933",
+      "run.googleapis.com/client-name": "cli-firebase",
+      "run.googleapis.com/custom-audiences": "[\"https://europe-west1-solaire-frontend.cloudfunctions.net/sendClientMagicLink\"]",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "20",
+      "run.googleapis.com/operation-id": "2b069631-fafa-407d-a4ca-4909a96c15b8",
+      "run.googleapis.com/urls": "[\"https://sendclientmagiclink-29459740400.europe-west1.run.app\",\"https://europe-west1-solaire-frontend.cloudfunctions.net/sendClientMagicLink\",\"https://sendclientmagiclink-z5hnfoy7ya-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "service-29459740400@gcf-admin-robot.iam.gserviceaccount.com",
+      "serving.knative.dev/lastModifier": "service-29459740400@gcf-admin-robot.iam.gserviceaccount.com"
+    },
+    "creationTimestamp": "2025-12-26T13:19:16.699153Z",
+    "generation": 6,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1",
+      "deployment-callable": "true",
+      "firebase-functions-hash": "63ae43f3ccd67416ea1ef79076e8def6852fafd0",
+      "goog-cloudfunctions-runtime": "nodejs24",
+      "goog-drz-cloudfunctions-id": "sendclientmagiclink",
+      "goog-drz-cloudfunctions-location": "europe-west1",
+      "goog-managed-by": "cloudfunctions"
+    },
+    "name": "sendclientmagiclink",
+    "namespace": "29459740400",
+    "resourceVersion": "AAZG24cwFVk",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/29459740400/services/sendclientmagiclink",
+    "uid": "13e6b774-d889-4e1e-8023-c5c08f8185ce"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "20",
+          "cloudfunctions.googleapis.com/trigger-type": "HTTP_TRIGGER",
+          "run.googleapis.com/base-images": "{\"worker\":\"europe-west1-docker.pkg.dev/serverless-runtimes/google-24-full/runtimes/nodejs24\"}",
+          "run.googleapis.com/client-name": "cli-firebase",
+          "run.googleapis.com/secrets": "secret-000b15c5-2d08-31bd-99c1-549443b4f6f6:projects/solaire-frontend/secrets/SMTP_USER,secret-2a53f5e3-535f-343c-abc5-418e2ce7b3c7:projects/solaire-frontend/secrets/SMTP_HOST,secret-30854334-c668-32b1-ab5f-c2867e1843cb:projects/solaire-frontend/secrets/SMTP_PASS,secret-4ae1bc2a-8123-38c3-8cb6-c86736d89e90:projects/solaire-frontend/secrets/SMTP_SECURE,secret-d0975c30-4e09-324d-bf25-ddec25d9af69:projects/solaire-frontend/secrets/SMTP_PORT,secret-f0adfce3-c197-35a1-94a9-3c1d306a1cee:projects/solaire-frontend/secrets/SMTP_FROM",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "deployment-callable": "true",
+          "firebase-functions-hash": "63ae43f3ccd67416ea1ef79076e8def6852fafd0",
+          "goog-drz-cloudfunctions-id": "sendclientmagiclink",
+          "goog-drz-cloudfunctions-location": "europe-west1",
+          "run.googleapis.com/startupProbeType": "Default"
+        },
+        "name": "sendclientmagiclink-00006-laq"
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "FIREBASE_CONFIG",
+                "value": "{\"projectId\":\"solaire-frontend\",\"storageBucket\":\"solaire-frontend.firebasestorage.app\"}"
+              },
+              {
+                "name": "GCLOUD_PROJECT",
+                "value": "solaire-frontend"
+              },
+              {
+                "name": "EVENTARC_CLOUD_EVENT_SOURCE",
+                "value": "projects/solaire-frontend/locations/europe-west1/services/sendClientMagicLink"
+              },
+              {
+                "name": "FUNCTION_TARGET",
+                "value": "sendClientMagicLink"
+              },
+              {
+                "name": "LOG_EXECUTION_ID",
+                "value": "true"
+              },
+              {
+                "name": "SMTP_HOST",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "1",
+                    "name": "secret-2a53f5e3-535f-343c-abc5-418e2ce7b3c7"
+                  }
+                }
+              },
+              {
+                "name": "SMTP_PORT",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "1",
+                    "name": "secret-d0975c30-4e09-324d-bf25-ddec25d9af69"
+                  }
+                }
+              },
+              {
+                "name": "SMTP_USER",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "1",
+                    "name": "secret-000b15c5-2d08-31bd-99c1-549443b4f6f6"
+                  }
+                }
+              },
+              {
+                "name": "SMTP_PASS",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "2",
+                    "name": "secret-30854334-c668-32b1-ab5f-c2867e1843cb"
+                  }
+                }
+              },
+              {
+                "name": "SMTP_FROM",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "1",
+                    "name": "secret-f0adfce3-c197-35a1-94a9-3c1d306a1cee"
+                  }
+                }
+              },
+              {
+                "name": "SMTP_SECURE",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "1",
+                    "name": "secret-4ae1bc2a-8123-38c3-8cb6-c86736d89e90"
+                  }
+                }
+              }
+            ],
+            "image": "europe-west1-docker.pkg.dev/solaire-frontend/gcf-artifacts/solaire--frontend__europe--west1__send_client_magic_link:version_1",
+            "name": "worker",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "256Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "runtimeClassName": "run.googleapis.com/linux-base-image-update",
+        "serviceAccountName": "29459740400-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 60
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://sendclientmagiclink-z5hnfoy7ya-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2025-12-26T14:15:40.121433Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2025-12-26T14:15:18.095172Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2025-12-26T14:15:40.088786Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "sendclientmagiclink-00006-laq",
+    "latestReadyRevisionName": "sendclientmagiclink-00006-laq",
+    "observedGeneration": 6,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "sendclientmagiclink-00006-laq"
+      }
+    ],
+    "url": "https://sendclientmagiclink-z5hnfoy7ya-ew.a.run.app"
+  }
+}

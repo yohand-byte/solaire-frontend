@@ -1,0 +1,128 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "cc9f3cf9-8dd8-4a2d-a99e-7b25e8570376",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/solaire-frontend/cloud-run-source-deploy/dp-generator",
+      "run.googleapis.com/build-name": "projects/29459740400/locations/europe-west1/builds/cc9f3cf9-8dd8-4a2d-a99e-7b25e8570376",
+      "run.googleapis.com/build-source-location": "gs://run-sources-solaire-frontend-europe-west1/services/dp-generator/1767513216.826521-c23289a8076840eaa8adc829885e5291.zip#1767513218052261",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "20",
+      "run.googleapis.com/operation-id": "b1784dbb-84da-43ff-bfcc-67377036820f",
+      "run.googleapis.com/urls": "[\"https://dp-generator-29459740400.europe-west1.run.app\",\"https://dp-generator-z5hnfoy7ya-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2026-01-01T20:47:22.038873Z",
+    "generation": 54,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "dp-generator",
+    "namespace": "29459740400",
+    "resourceVersion": "AAZH2oYxNBk",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/29459740400/services/dp-generator",
+    "uid": "a7b095b4-c67b-4124-8a5a-e681618630d9"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "20",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "kullkwmlig",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "GOOGLE_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "latest",
+                    "name": "google-maps-api-key"
+                  }
+                }
+              }
+            ],
+            "image": "europe-west1-docker.pkg.dev/solaire-frontend/cloud-run-source-deploy/dp-generator@sha256:7e3f0df5ba7733111c61ddd8d880ea2fb1d1400adb0dbb67f751dffc25899286",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1000m",
+                "memory": "1Gi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "29459740400-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 120
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://dp-generator-z5hnfoy7ya-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-01-08T06:29:00.078105Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-01-08T06:28:49.601730Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2026-01-08T06:29:00.056013Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "dp-generator-00050-sxl",
+    "latestReadyRevisionName": "dp-generator-00050-sxl",
+    "observedGeneration": 54,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "dp-generator-00050-sxl"
+      }
+    ],
+    "url": "https://dp-generator-z5hnfoy7ya-ew.a.run.app"
+  }
+}

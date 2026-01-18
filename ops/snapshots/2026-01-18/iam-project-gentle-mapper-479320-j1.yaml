@@ -1,0 +1,42 @@
+bindings:
+- members:
+  - user:yohan.d@qualiwatt.com
+  role: roles/artifactregistry.createOnPushWriter
+- members:
+  - serviceAccount:service-828508661560@gcp-sa-artifactregistry.iam.gserviceaccount.com
+  role: roles/artifactregistry.serviceAgent
+- members:
+  - serviceAccount:service-828508661560@gcp-sa-cloudaicompanion.iam.gserviceaccount.com
+  role: roles/cloudaicompanion.serviceAgent
+- members:
+  - serviceAccount:828508661560@cloudbuild.gserviceaccount.com
+  role: roles/cloudbuild.builds.builder
+- members:
+  - user:yohan.d@qualiwatt.com
+  role: roles/cloudbuild.builds.editor
+- members:
+  - serviceAccount:service-828508661560@gcp-sa-cloudbuild.iam.gserviceaccount.com
+  role: roles/cloudbuild.serviceAgent
+- members:
+  - serviceAccount:service-828508661560@containerregistry.iam.gserviceaccount.com
+  role: roles/containerregistry.ServiceAgent
+- members:
+  - serviceAccount:828508661560-compute@developer.gserviceaccount.com
+  role: roles/editor
+- members:
+  - serviceAccount:service-828508661560@firebase-rules.iam.gserviceaccount.com
+  role: roles/firebaserules.system
+- members:
+  - serviceAccount:service-828508661560@gcp-sa-firestore.iam.gserviceaccount.com
+  role: roles/firestore.serviceAgent
+- members:
+  - user:yohan.d@qualiwatt.com
+  role: roles/owner
+- members:
+  - serviceAccount:service-828508661560@gcp-sa-pubsub.iam.gserviceaccount.com
+  role: roles/pubsub.serviceAgent
+- members:
+  - serviceAccount:service-828508661560@serverless-robot-prod.iam.gserviceaccount.com
+  role: roles/run.serviceAgent
+etag: BwZFf-foVuM=
+version: 1

@@ -1,0 +1,112 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "20",
+      "run.googleapis.com/operation-id": "22943c05-7560-40ea-b4b9-3be3628e7960",
+      "run.googleapis.com/urls": "[\"https://html-carto-api-29459740400.europe-west1.run.app\",\"https://html-carto-api-z5hnfoy7ya-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2026-01-11T20:05:09.316923Z",
+    "generation": 3,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "html-carto-api",
+    "namespace": "29459740400",
+    "resourceVersion": "AAZIIxs3ZL4",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/29459740400/services/html-carto-api",
+    "uid": "f85417fb-a272-477c-9453-25816349d261"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "10",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "drgbsyenko",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "image": "gcr.io/solaire-frontend/html-carto-api",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "29459740400-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 60
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://html-carto-api-z5hnfoy7ya-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-01-11T21:04:37.934270Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-01-11T21:04:32.621676Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2026-01-11T21:04:37.903564Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "html-carto-api-00003-lgb",
+    "latestReadyRevisionName": "html-carto-api-00003-lgb",
+    "observedGeneration": 3,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "html-carto-api-00003-lgb"
+      }
+    ],
+    "url": "https://html-carto-api-z5hnfoy7ya-ew.a.run.app"
+  }
+}

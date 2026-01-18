@@ -1,0 +1,150 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "1f6d10f3-ae02-4ec4-a7d9-a9c7b758da3d",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/solaire-frontend/cloud-run-source-deploy/solaire-dp-generator",
+      "run.googleapis.com/build-name": "projects/29459740400/locations/europe-west1/builds/1f6d10f3-ae02-4ec4-a7d9-a9c7b758da3d",
+      "run.googleapis.com/build-source-location": "gs://run-sources-solaire-frontend-europe-west1/services/solaire-dp-generator/1768115071.736991-4b6b1fba59ed46e79d713df84b237ba2.zip#1768115072672299",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "20",
+      "run.googleapis.com/operation-id": "2d15efa5-a6c5-47ea-bbaf-eaf1ef25b0ae",
+      "run.googleapis.com/urls": "[\"https://solaire-dp-generator-29459740400.europe-west1.run.app\",\"https://solaire-dp-generator-z5hnfoy7ya-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2026-01-01T05:15:29.402949Z",
+    "generation": 34,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "solaire-dp-generator",
+    "namespace": "29459740400",
+    "resourceVersion": "AAZIF3AsHX8",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/29459740400/services/solaire-dp-generator",
+    "uid": "1e911771-50ac-471c-999c-aeb821daa0eb"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "20",
+          "autoscaling.knative.dev/minScale": "1",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "ahfwfzwjyz",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 1,
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "GOOGLE_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "latest",
+                    "name": "google-maps-api-key"
+                  }
+                }
+              },
+              {
+                "name": "API_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "latest",
+                    "name": "solaire-api-token"
+                  }
+                }
+              },
+              {
+                "name": "CADASTRE_BUFFER_M",
+                "value": "120"
+              }
+            ],
+            "image": "europe-west1-docker.pkg.dev/solaire-frontend/cloud-run-source-deploy/solaire-dp-generator@sha256:63b1729f887882f6379ce3ec5aec6044e17714669aa4b4ee6a91e7c5417d26fd",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "29459740400-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 900
+      }
+    },
+    "traffic": [
+      {
+        "percent": 100,
+        "revisionName": "solaire-dp-generator-00015-paq"
+      },
+      {
+        "revisionName": "solaire-dp-generator-00027-8t7",
+        "tag": "canary"
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://solaire-dp-generator-z5hnfoy7ya-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-01-11T07:09:23.650943Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-01-11T07:09:22.775836Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2026-01-11T07:09:23.617385Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "solaire-dp-generator-00027-8t7",
+    "latestReadyRevisionName": "solaire-dp-generator-00027-8t7",
+    "observedGeneration": 34,
+    "traffic": [
+      {
+        "percent": 100,
+        "revisionName": "solaire-dp-generator-00015-paq"
+      },
+      {
+        "revisionName": "solaire-dp-generator-00027-8t7",
+        "tag": "canary",
+        "url": "https://canary---solaire-dp-generator-z5hnfoy7ya-ew.a.run.app"
+      }
+    ],
+    "url": "https://solaire-dp-generator-z5hnfoy7ya-ew.a.run.app"
+  }
+}

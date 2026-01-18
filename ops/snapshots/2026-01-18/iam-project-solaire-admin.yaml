@@ -1,0 +1,40 @@
+bindings:
+- members:
+  - serviceAccount:service-294963767896@gcf-admin-robot.iam.gserviceaccount.com
+  role: roles/cloudfunctions.serviceAgent
+- members:
+  - serviceAccount:service-294963767896@containerregistry.iam.gserviceaccount.com
+  role: roles/containerregistry.ServiceAgent
+- members:
+  - serviceAccount:294963767896-compute@developer.gserviceaccount.com
+  - serviceAccount:solaire-admin@appspot.gserviceaccount.com
+  role: roles/editor
+- members:
+  - serviceAccount:service-294963767896@gcp-sa-firebase.iam.gserviceaccount.com
+  role: roles/firebase.managementServiceAgent
+- members:
+  - serviceAccount:firebase-adminsdk-fbsvc@solaire-admin.iam.gserviceaccount.com
+  role: roles/firebase.sdkAdminServiceAgent
+- members:
+  - serviceAccount:firebase-adminsdk-fbsvc@solaire-admin.iam.gserviceaccount.com
+  role: roles/firebaseappcheck.admin
+- members:
+  - serviceAccount:firebase-adminsdk-fbsvc@solaire-admin.iam.gserviceaccount.com
+  role: roles/firebaseauth.admin
+- members:
+  - serviceAccount:service-294963767896@firebase-rules.iam.gserviceaccount.com
+  role: roles/firebaserules.system
+- members:
+  - serviceAccount:service-294963767896@gcp-sa-firestore.iam.gserviceaccount.com
+  role: roles/firestore.serviceAgent
+- members:
+  - serviceAccount:firebase-adminsdk-fbsvc@solaire-admin.iam.gserviceaccount.com
+  role: roles/iam.serviceAccountTokenCreator
+- members:
+  - user:yohan.d@qualiwatt.com
+  role: roles/owner
+- members:
+  - serviceAccount:service-294963767896@serverless-robot-prod.iam.gserviceaccount.com
+  role: roles/run.serviceAgent
+etag: BwZIpXF41YE=
+version: 1

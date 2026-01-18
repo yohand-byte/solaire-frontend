@@ -1,0 +1,27 @@
+bindings:
+- members:
+  - serviceAccount:service-596239108234@gcp-sa-artifactregistry.iam.gserviceaccount.com
+  role: roles/artifactregistry.serviceAgent
+- members:
+  - serviceAccount:596239108234@cloudbuild.gserviceaccount.com
+  role: roles/cloudbuild.builds.builder
+- members:
+  - serviceAccount:service-596239108234@gcp-sa-cloudbuild.iam.gserviceaccount.com
+  role: roles/cloudbuild.serviceAgent
+- members:
+  - serviceAccount:service-596239108234@containerregistry.iam.gserviceaccount.com
+  role: roles/containerregistry.ServiceAgent
+- members:
+  - serviceAccount:596239108234-compute@developer.gserviceaccount.com
+  role: roles/editor
+- members:
+  - user:yohan.d@qualiwatt.com
+  role: roles/owner
+- members:
+  - serviceAccount:service-596239108234@gcp-sa-pubsub.iam.gserviceaccount.com
+  role: roles/pubsub.serviceAgent
+- members:
+  - serviceAccount:service-596239108234@serverless-robot-prod.iam.gserviceaccount.com
+  role: roles/run.serviceAgent
+etag: BwZF_u1coWc=
+version: 1

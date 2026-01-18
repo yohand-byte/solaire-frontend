@@ -1,0 +1,15 @@
+project	service	role
+gentle-mapper-479320-j1	cerfa-api	roles/run.invoker
+gentle-mapper-479320-j1	crm-webhook	roles/run.invoker
+gentle-mapper-479320-j1	solaire-api	roles/run.invoker
+gentle-mapper-479320-j1	solaire-frontend	roles/run.invoker
+mcp-gcp-prod	mcp-api	roles/run.invoker
+mcp-gcp-prod	solaire-api	roles/run.invoker
+mcp-gcp-prod-481314	mcp-router	roles/run.invoker
+solaire-frontend	core-api	roles/run.invoker
+solaire-frontend	dp-generator	roles/run.invoker
+solaire-frontend	html-carto-api	roles/run.invoker
+solaire-frontend	sendclientmagiclink	roles/run.invoker
+solaire-frontend	solaire-api	roles/run.invoker
+solaire-frontend	solaire-dp-generator	roles/run.invoker
+solaire-frontend	solaire-frontend	roles/run.invoker

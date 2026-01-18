@@ -1,0 +1,131 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "b4f0c4a3-eb5a-42d3-901b-9157ac719dfe",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/mcp-gcp-prod-481314/cloud-run-source-deploy/mcp-router",
+      "run.googleapis.com/build-name": "projects/568369588098/locations/europe-west1/builds/b4f0c4a3-eb5a-42d3-901b-9157ac719dfe",
+      "run.googleapis.com/build-source-location": "gs://run-sources-mcp-gcp-prod-481314-europe-west1/services/mcp-router/1765988388.198757-34e9d5ea15314062add65c4168e58a64.zip#1765988391953524",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "3",
+      "run.googleapis.com/operation-id": "11800784-17a1-45c7-add7-e1387d9fdef0",
+      "run.googleapis.com/urls": "[\"https://mcp-router-568369588098.europe-west1.run.app\",\"https://mcp-router-abrokygzpa-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2025-12-17T16:04:41.194834Z",
+    "generation": 3,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "mcp-router",
+    "namespace": "568369588098",
+    "resourceVersion": "AAZGKDv0Z+E",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/568369588098/services/mcp-router",
+    "uid": "7e8cdd3c-c7b8-41d4-8b14-3761a4239c18"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "3",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "tprubqbazv",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "ANTHROPIC_API_KEY",
+                "value": "REDACTED"
+              },
+              {
+                "name": "OPENAI_API_KEY",
+                "value": "REDACTED"
+              },
+              {
+                "name": "MISTRAL_API_KEY",
+                "value": "REDACTED"
+              }
+            ],
+            "image": "europe-west1-docker.pkg.dev/mcp-gcp-prod-481314/cloud-run-source-deploy/mcp-router@sha256:445733ac5c0f6f7a0d8647b265ed5e489cd98362a916cac05d19045bd97d9df5",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1000m",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "568369588098-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 300
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://mcp-router-abrokygzpa-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2025-12-17T16:21:18.773217Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2025-12-17T16:21:17.525164Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2025-12-17T16:21:18.739281Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "mcp-router-00003-zgj",
+    "latestReadyRevisionName": "mcp-router-00003-zgj",
+    "observedGeneration": 3,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "mcp-router-00003-zgj"
+      }
+    ],
+    "url": "https://mcp-router-abrokygzpa-ew.a.run.app"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-base-image": "europe-west1-docker.pkg.dev/serverless-runtimes/google-22/run/universal:public-image-next",
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "8d36efe3-8b13-4e3f-8229-13a3fe9badf1",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/mcp-gcp-prod/cloud-run-source-deploy/mcp-api",
+      "run.googleapis.com/build-name": "projects/596239108234/locations/europe-west1/builds/8d36efe3-8b13-4e3f-8229-13a3fe9badf1",
+      "run.googleapis.com/build-source-location": "gs://run-sources-mcp-gcp-prod-europe-west1/services/mcp-api/1765822319.886009-c4e26297c8504133a03a13bf83a0e85a.zip#1765822323110845",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/operation-id": "a770eed6-a774-41d3-b15d-1c8c5e7f8240",
+      "run.googleapis.com/urls": "[\"https://mcp-api-596239108234.europe-west1.run.app\",\"https://mcp-api-tui46uz4wa-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2025-12-15T15:06:26.056950Z",
+    "generation": 4,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "mcp-api",
+    "namespace": "596239108234",
+    "resourceVersion": "AAZGAZMwQDU",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/596239108234/services/mcp-api",
+    "uid": "71959c3b-6be4-4e3e-91d9-15009bba63aa"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "20",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "hfmpwwiksk",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "image": "europe-west1-docker.pkg.dev/mcp-gcp-prod/cloud-run-source-deploy/mcp-api@sha256:b1614cc5fbbe6d393b42014575fd685a1d9a6de91f5c2713057452e24b02fab1",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1000m",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "596239108234-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 300
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://mcp-api-tui46uz4wa-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2025-12-15T18:13:58.588469Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2025-12-15T18:13:52.806755Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2025-12-15T18:13:58.567586Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "mcp-api-00004-9x5",
+    "latestReadyRevisionName": "mcp-api-00004-9x5",
+    "observedGeneration": 4,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "mcp-api-00004-9x5"
+      }
+    ],
+    "url": "https://mcp-api-tui46uz4wa-ew.a.run.app"
+  }
+}

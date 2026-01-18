@@ -1,0 +1,12 @@
+{
+  "bindings": [
+    {
+      "members": [
+        "allUsers"
+      ],
+      "role": "roles/run.invoker"
+    }
+  ],
+  "etag": "BwZIIxQTTww=",
+  "version": 1
+}

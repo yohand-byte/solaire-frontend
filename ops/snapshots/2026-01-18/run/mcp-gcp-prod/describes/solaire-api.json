@@ -1,0 +1,116 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/build-enable-automatic-updates": "false",
+      "run.googleapis.com/build-id": "b834d464-40db-4db6-863b-5f148d94674f",
+      "run.googleapis.com/build-image-uri": "europe-west1-docker.pkg.dev/mcp-gcp-prod/cloud-run-source-deploy/solaire-api",
+      "run.googleapis.com/build-name": "projects/596239108234/locations/europe-west1/builds/b834d464-40db-4db6-863b-5f148d94674f",
+      "run.googleapis.com/build-source-location": "gs://run-sources-mcp-gcp-prod-europe-west1/services/solaire-api/1765831329.314672-2fec295916554cc9a0fd051c5d0d19c7.zip#1765831329905527",
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "548.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/operation-id": "074f59b2-2a2b-46aa-b780-8f2f1432e3aa",
+      "run.googleapis.com/urls": "[\"https://solaire-api-596239108234.europe-west1.run.app\",\"https://solaire-api-tui46uz4wa-ew.a.run.app\"]",
+      "serving.knative.dev/creator": "yohan.d@qualiwatt.com",
+      "serving.knative.dev/lastModifier": "yohan.d@qualiwatt.com"
+    },
+    "creationTimestamp": "2025-12-15T20:43:28.196587Z",
+    "generation": 1,
+    "labels": {
+      "cloud.googleapis.com/location": "europe-west1"
+    },
+    "name": "solaire-api",
+    "namespace": "596239108234",
+    "resourceVersion": "AAZGA6pXT1E",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/596239108234/services/solaire-api",
+    "uid": "1feb29e5-86dd-4c04-9e0e-5aafb1de67cb"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "20",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "548.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "asaywgpahz",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "image": "europe-west1-docker.pkg.dev/mcp-gcp-prod/cloud-run-source-deploy/solaire-api@sha256:96a6bd80aa03ec71b4959f9414cea270bcc5f2cf0fae259394b382d66ed2dd4c",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1000m",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "596239108234-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 300
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "address": {
+      "url": "https://solaire-api-tui46uz4wa-ew.a.run.app"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2025-12-15T20:43:36.958801Z",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2025-12-15T20:43:35.711633Z",
+        "status": "True",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2025-12-15T20:43:36.926070Z",
+        "status": "True",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "solaire-api-00001-9cx",
+    "latestReadyRevisionName": "solaire-api-00001-9cx",
+    "observedGeneration": 1,
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100,
+        "revisionName": "solaire-api-00001-9cx"
+      }
+    ],
+    "url": "https://solaire-api-tui46uz4wa-ew.a.run.app"
+  }
+}
