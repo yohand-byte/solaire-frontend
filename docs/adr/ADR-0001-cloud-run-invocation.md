@@ -25,3 +25,5 @@ Baseline: tous les services Cloud Run listés ont `allUsers` sur roles/run.invok
 ## Rollback
 - Réappliquer les policies IAM sauvegardées sur les services concernés (run services set-iam-policy).
 ---
+
+PR test: secret scan workflow
