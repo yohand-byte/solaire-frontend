@@ -59,7 +59,7 @@
               },
               {
                 "name": "FIREBASE_WEB_API_KEY",
-                "value": "AIzaSyBc1cYCEqFVXvB2YdxHTxhVlPqtTbfVVLM"
+                "value": "REDACTED"
               },
               {
                 "name": "DEBUG_RETURN_LINK",
@@ -67,7 +67,7 @@
               },
               {
                 "name": "ADMIN_API_KEY",
-                "value": "AIzaSyBc1cYCEqFVXvB2YdxHTxhVlPqtTbfVVLM"
+                "value": "REDACTED"
               }
             ],
             "image": "europe-west1-docker.pkg.dev/solaire-frontend/cloud-run-source-deploy/solaire-api@sha256:3b5d5ef977f5ad478f7ccb9113c85013adc5b1fb8b09fe4f23039f20708298b5",

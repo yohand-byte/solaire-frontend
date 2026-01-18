@@ -50,7 +50,7 @@
             "env": [
               {
                 "name": "API_KEY",
-                "value": "c1c99a74e81712318960f4f3b6f5f40308ea18f4aee2f33d"
+                "value": "REDACTED"
               }
             ],
             "image": "europe-west1-docker.pkg.dev/gentle-mapper-479320-j1/cloud-run-source-deploy/cerfa-api@sha256:19fcff68f74d16ad3cadcac447cc53137da7b7e5ccbea9ca489d2d7696b72d87",

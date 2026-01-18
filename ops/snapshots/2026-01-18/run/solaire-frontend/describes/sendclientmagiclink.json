@@ -66,7 +66,7 @@
             "env": [
               {
                 "name": "FIREBASE_CONFIG",
-                "value": "{\"projectId\":\"solaire-frontend\",\"storageBucket\":\"solaire-frontend.firebasestorage.app\"}"
+                "value": "REDACTED"
               },
               {
                 "name": "GCLOUD_PROJECT",
