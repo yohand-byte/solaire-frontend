@@ -8,5 +8,47 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Limova Chatbot Integration -->
+    <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const iframe = document.createElement("iframe");
+      iframe.src = "https://limova-web-sltj.onrender.com/embededChatbot?connectionId=a92d1f99-0c96-4db6-927b-54c0d74cb6d7";
+      const isMobile = window.innerWidth < 768;
+      const openWidth = isMobile ? "90%" : "420px";
+      const openHeight = isMobile ? "calc(100vh - 100px)" : "600px";
+      const closedWidth = "70px";
+      const closedHeight = "70px";
+      const right = isMobile ? "5%" : "30px";
+      Object.assign(iframe.style, {
+        position: "fixed",
+        bottom: "20px",
+        right: right,
+        border: "none",
+        zIndex: "1000",
+        width: closedWidth,
+        height: closedHeight,
+        borderRadius: "35px",
+        transition: "width 0.3s ease, height 0.3s ease, border-radius 0.3s ease",
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+        overflow: "hidden"
+      });
+      document.body.appendChild(iframe);
+      window.addEventListener("message", function(event) {
+        const data = event.data;
+        if (data && typeof data === "object" && "chatbotOpen" in data) {
+          if (data.chatbotOpen === true) {
+            iframe.style.width = openWidth;
+            iframe.style.height = openHeight;
+            iframe.style.borderRadius = "10px";
+          } else if (data.chatbotOpen === false) {
+            iframe.style.width = closedWidth;
+            iframe.style.height = closedHeight;
+            iframe.style.borderRadius = "35px";
+          }
+        }
+      });
+    });
+    </script>
   </body>
 </html>
