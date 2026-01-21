@@ -1,41 +1,74 @@
 const express = require('express');
 const app = express();
-const { requireApiToken, storage, BUCKET_NAME, db, admin } = require('./middleware');
+// ... other imports and middleware
 
-// Existing cerfa/generate endpoint
-app.post(['/cerfa/generate', '/api/cerfa/generate'], requireApiToken, async (req, res) => {
-  // ... existing code ...
+// cadastre/detect endpoint
+app.post('/cadastre/detect', (req, res) => {
+  // existing code
 });
 
-// New signature upload endpoint added AFTER cerfa/generate endpoint
-app.post(['/projects/:id/signature', '/api/projects/:id/signature'], requireApiToken, async (req, res) => {
+// CERFA generate endpoint
+app.post(['/cerfa/generate', '/api/cerfa/generate'], requireApiToken, async (req, res) => {
   try {
-    const { signatureDataUrl } = req.body;
-    if (!signatureDataUrl) return res.status(400).json({ error: 'signatureDataUrl requis' });
+    const { projectId } = req.body;
+    if (!projectId) return res.status(400).json({ error: 'projectId requis' });
     
-    const base64Data = signatureDataUrl.replace(/^data:image\/png;base64,/, '');
-    const imageBuffer = Buffer.from(base64Data, 'base64');
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) return res.status(404).json({ error: 'Projet non trouve' });
+    const project = { id: projectDoc.id, ...projectDoc.data() };
     
-    const fileName = `signature_${req.params.id}_${Date.now()}.png`;
-    const filePath = `signatures/${req.params.id}/${fileName}`;
+    const installerDoc = await db.collection('installers').doc(project.installerId).get();
+    if (!installerDoc.exists) return res.status(404).json({ error: 'Installateur non trouve' });
+    const installer = { id: installerDoc.id, ...installerDoc.data() };
+    
+    if (!project.cadastre || !project.cadastre.section) {
+      return res.status(400).json({ error: 'Parcelle cadastrale non definie. Utilisez /api/cadastre/detect' });
+    }
+    
+    const CERFAGenerator = require('./src/cerfa/cerfaGenerator');
+    const templatePath = require('path').join(__dirname, 'src/cerfa/templates/cerfa_16702-01.pdf');
+    const generator = new CERFAGenerator(templatePath);
+    
+    const pdfBuffer = await generator.generate(
+      project, 
+      installer, 
+      project.cadastre,
+      project.signatureUrl,
+      installer.tamponUrl
+    );
+    
+    const clientName = project.beneficiary?.lastName || 'client';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `CERFA-16702-01_${clientName}_${project.reference}_${dateStr}.pdf`;
+    const filePath = `documents/${projectId}/cerfa/${fileName}`;
     
     const file = storage.bucket(BUCKET_NAME).file(filePath);
-    await file.save(imageBuffer, { metadata: { contentType: 'image/png' } });
+    await file.save(pdfBuffer, { metadata: { contentType: 'application/pdf' } });
     await file.makePublic();
     
     const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filePath}`;
     
-    await db.collection('projects').doc(req.params.id).update({
-      signatureUrl: publicUrl,
-      signatureUploadedAt: admin.firestore.FieldValue.serverTimestamp()
+    await db.collection('documents').add({
+      projectId: projectId,
+      stage: 'cerfa',
+      category: 'cerfa-declaration',
+      filename: fileName,
+      url: publicUrl,
+      mimeType: 'application/pdf',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    res.json({ ok: true, message: 'Signature uploadee', url: publicUrl });
+    res.json({
+      ok: true,
+      message: 'CERFA 16702-01 genere',
+      filename: fileName,
+      url: publicUrl
+    });
     
   } catch (err) {
-    console.error('Upload signature error:', err);
+    console.error('CERFA Generate error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-module.exports = app;
+// ... other routes and app.listen
