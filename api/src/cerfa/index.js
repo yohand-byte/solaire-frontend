@@ -2,25 +2,27 @@ const { PDFDocument } = require('pdf-lib');
 const fetch = require('node-fetch');
 
 class CERFAService {
-  constructor(googleApiKey) {
-    this.googleApiKey = googleApiKey;
+  constructor() {
+    // No API key needed - using free French government APIs
   }
 
   async detectParcelles(address, radius = 50) {
     try {
       console.log('Detection parcelles pour:', address);
       
-      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${this.googleApiKey}`;
+      // Using FREE French government geocoding API
+      const geocodeUrl = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(address)}&limit=1`;
       const geocodeRes = await fetch(geocodeUrl);
       const geocodeData = await geocodeRes.json();
       
-      if (geocodeData.status !== 'OK') {
-        throw new Error(`Geocoding failed: ${geocodeData.status}`);
+      if (!geocodeData.features || geocodeData.features.length === 0) {
+        throw new Error('Geocoding failed: Address not found');
       }
       
-      const location = geocodeData.results[0].geometry.location;
-      const lat = location.lat;
-      const lon = location.lng;
+      const feature = geocodeData.features[0];
+      const coords = feature.geometry.coordinates;
+      const lon = coords[0];
+      const lat = coords[1];
       
       console.log('Coordonnees:', lat, lon);
       
@@ -46,7 +48,7 @@ class CERFAService {
       }
       
       return {
-        address: geocodeData.results[0].formatted_address,
+        address: feature.properties.label,
         coords: { lat, lon },
         parcelles: parcelles
       };
